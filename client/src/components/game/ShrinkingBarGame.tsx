@@ -8,7 +8,10 @@ const BAR_PADDING_X = 50;
 const CURSOR_RADIUS = 12;
 
 // CONFIGURACIÓN MATRIX VAPORWAVE
-const FONT_SIZE = 10; // Reducido para MÁS letras
+const FONT_SIZE = 10; 
+const MATRIX_SPEED = 0.3; // Más lento (antes 1.0)
+const NUM_ENTITIES = 50; // ¡MUCHAS MÁS FIGURAS! (antes 6)
+
 const VAPORWAVE_COLORS = [
     "#FF71CE", // Rosa neón
     "#01CDFE", // Cian neón
@@ -17,14 +20,18 @@ const VAPORWAVE_COLORS = [
     "#FFFB96"  // Amarillo pálido neón
 ];
 
-// Definición para los fractales flotantes
+type ShapeType = 'mandala' | 'circle' | 'square' | 'triangle' | 'cross';
+
 interface FractalEntity {
     x: number;
     y: number;
     vx: number;
     vy: number;
     sizeScale: number;
-    phase: number; // Para rotación individual
+    phase: number;
+    type: ShapeType;      // Tipo de figura
+    rotationSpeed: number; // Velocidad de giro única
+    colorOffset: number;   // Para variar el color
 }
 
 export function ShrinkingBarGame() {
@@ -40,10 +47,9 @@ export function ShrinkingBarGame() {
   const matrixDropsRef = useRef<number[]>(Array(Math.floor(CANVAS_WIDTH / FONT_SIZE)).fill(1));
   // ========================
 
-  // === FRACTAL SWARM REFS (NUEVO) ===
-  // Inicializamos vacio, lo llenamos en el useEffect
+  // === FRACTAL SWARM REFS ===
   const fractalsRef = useRef<FractalEntity[]>([]);
-  // ==================================
+  // ==========================
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
@@ -74,7 +80,7 @@ export function ShrinkingBarGame() {
     updatePlayers,
     updateParticles,
     updateCountdown,
-    handlePlayerInput: storeHandlePlayerInput, // Renombramos para envolverlo
+    handlePlayerInput: storeHandlePlayerInput,
     resetGame,
     rematch,
     resetScores,
@@ -83,18 +89,28 @@ export function ShrinkingBarGame() {
     setCallbacks,
   } = useShrinkingBar();
 
-  // === INICIALIZAR FRACTALES FLOTANTES ===
+  // === INICIALIZAR ENJAMBRE GEOMÉTRICO ===
   useEffect(() => {
-      // Crear 6 fractales aleatorios
       const entities: FractalEntity[] = [];
-      for(let i=0; i<6; i++) {
+      const types: ShapeType[] = ['mandala', 'circle', 'square', 'triangle', 'cross'];
+
+      for(let i=0; i < NUM_ENTITIES; i++) {
+          // Probabilidades: Menos mandalas (son costosos), más figuras simples
+          let type: ShapeType;
+          const r = Math.random();
+          if (r < 0.1) type = 'mandala'; // 10% mandalas
+          else type = types[Math.floor(Math.random() * types.length)];
+
           entities.push({
               x: Math.random() * CANVAS_WIDTH,
               y: Math.random() * CANVAS_HEIGHT,
-              vx: (Math.random() - 0.5) * 100, // Velocidad inicial
-              vy: (Math.random() - 0.5) * 100,
-              sizeScale: 0.5 + Math.random() * 0.5, // Tamaños variados
-              phase: Math.random() * Math.PI * 2
+              vx: (Math.random() - 0.5) * 80, 
+              vy: (Math.random() - 0.5) * 80,
+              sizeScale: 0.3 + Math.random() * 0.7, 
+              phase: Math.random() * Math.PI * 2,
+              type: type,
+              rotationSpeed: (Math.random() - 0.5) * 2,
+              colorOffset: Math.floor(Math.random() * 100)
           });
       }
       fractalsRef.current = entities;
@@ -182,16 +198,14 @@ export function ShrinkingBarGame() {
     });
   }, [setCallbacks]);
 
-  // === NUEVO WRAPPER PARA INPUT: CAOS FRACTAL ===
   const handlePlayerInput = useCallback((key: string) => {
-      // 1. Llamar a la lógica original del juego
       storeHandlePlayerInput(key);
 
-      // 2. CAOS: Cambiar dirección de todos los fractales aleatoriamente
+      // CAOS: Impulso aleatorio a TODAS las figuras al interactuar
       fractalsRef.current.forEach(f => {
-          // Asignar nueva velocidad aleatoria (más rápida para que se sienta el impacto)
-          f.vx = (Math.random() - 0.5) * 300; 
-          f.vy = (Math.random() - 0.5) * 300;
+          f.vx = (Math.random() - 0.5) * 400; 
+          f.vy = (Math.random() - 0.5) * 400;
+          f.rotationSpeed = (Math.random() - 0.5) * 10; // También cambian giro
       });
 
   }, [storeHandlePlayerInput]);
@@ -243,9 +257,8 @@ export function ShrinkingBarGame() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // === DIBUJAR LLUVIA MATRIX (MÁS DENSA) ===
+  // === DIBUJAR LLUVIA MATRIX (LENTA) ===
   const drawMatrixRain = useCallback((ctx: CanvasRenderingContext2D) => {
-    // Rastro más corto (más oscuro) para que se vean más claras las letras nuevas
     ctx.fillStyle = "rgba(0, 0, 0, 0.08)"; 
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -253,7 +266,6 @@ export function ShrinkingBarGame() {
     ctx.textAlign = "center";
     const drops = matrixDropsRef.current;
 
-    // Asegurarnos que drops tenga el tamaño correcto si cambió CANVAS_WIDTH (resiliencia)
     if (drops.length < Math.floor(CANVAS_WIDTH / FONT_SIZE)) {
         const diff = Math.floor(CANVAS_WIDTH / FONT_SIZE) - drops.length;
         for(let k=0; k<diff; k++) drops.push(Math.random() * 100);
@@ -264,17 +276,18 @@ export function ShrinkingBarGame() {
         const color = VAPORWAVE_COLORS[Math.floor(Math.random() * VAPORWAVE_COLORS.length)];
         
         ctx.fillStyle = color;
-        // Quitamos shadowBlur aquí por rendimiento, ya que son MUCHAS letras
-        ctx.fillText(char, i * FONT_SIZE, drops[i] * FONT_SIZE);
+        // Math.floor para que no vibre al renderizar floats
+        ctx.fillText(char, i * FONT_SIZE, Math.floor(drops[i]) * FONT_SIZE);
 
         if (drops[i] * FONT_SIZE > CANVAS_HEIGHT && Math.random() > 0.98) {
             drops[i] = 0;
         }
-        drops[i]++;
+        // VELOCIDAD REDUCIDA
+        drops[i] += MATRIX_SPEED;
     }
   }, []);
 
-  // === DIBUJAR VISUALIZADOR MULTI-FRACTAL ===
+  // === DIBUJAR VISUALIZADOR MULTI-FORMA ===
   const drawVisualizerBg = useCallback((ctx: CanvasRenderingContext2D, delta: number) => {
     const analyser = analyserRef.current;
     const dataArray = dataArrayRef.current;
@@ -287,7 +300,7 @@ export function ShrinkingBarGame() {
     analyser.getByteFrequencyData(dataArray);
     const bufferLength = dataArray.length;
     
-    // Bajos
+    // Bajos para Zoom
     let bass = 0;
     for(let i = 0; i < 10; i++) bass += dataArray[i];
     bass = bass / 10 / 255;
@@ -297,82 +310,105 @@ export function ShrinkingBarGame() {
     // 1. DIBUJAR MATRIX DE FONDO
     drawMatrixRain(ctx);
 
-    // 2. CAPA DE UNIFICACIÓN (para que los fractales brillen sobre lo oscuro)
+    // 2. CAPA UNIFICADORA
     ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; 
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // 3. ACTUALIZAR Y DIBUJAR CADA FRACTAL
-    const fractals = fractalsRef.current;
+    // 3. ACTUALIZAR Y DIBUJAR ENTIDADES
+    const entities = fractalsRef.current;
     
-    // Parámetros visuales compartidos
-    const bars = 20; // Menos barras por fractal para mantener rendimiento
-    const symmetry = 5; 
-    const step = Math.floor(bufferLength / bars);
-
-    fractals.forEach((f, fIndex) => {
-        // MOVIMIENTO FÍSICO
+    entities.forEach((f, fIndex) => {
+        // --- FÍSICA ---
         f.x += f.vx * delta;
         f.y += f.vy * delta;
+        f.phase += f.rotationSpeed * delta; // Rotación continua
 
-        // Rebote en bordes
-        if (f.x < 0 || f.x > CANVAS_WIDTH) f.vx *= -1;
-        if (f.y < 0 || f.y > CANVAS_HEIGHT) f.vy *= -1;
+        if (f.x < -50) f.x = CANVAS_WIDTH + 50;
+        if (f.x > CANVAS_WIDTH + 50) f.x = -50;
+        if (f.y < -50) f.y = CANVAS_HEIGHT + 50;
+        if (f.y > CANVAS_HEIGHT + 50) f.y = -50;
         
-        // Clamp posiciones para que no se escapen
-        f.x = Math.max(0, Math.min(CANVAS_WIDTH, f.x));
-        f.y = Math.max(0, Math.min(CANVAS_HEIGHT, f.y));
-
         ctx.save();
         ctx.translate(f.x, f.y);
 
-        // Zoom y rotación individual
-        // El bass afecta a todos, pero con fases distintas
-        const localScale = f.sizeScale * (1 + bass * 0.5);
+        // Zoom rítmico
+        const localScale = f.sizeScale * (1 + bass * 0.4); // Zoom al ritmo del bajo
         ctx.scale(localScale, localScale);
-        ctx.rotate(f.phase + time * 0.5 + bass * Math.PI); // Giran
+        ctx.rotate(f.phase + bass * Math.PI * 0.2); // Empujón extra al girar con el bajo
 
-        // DIBUJAR EL MINI-MANDALA
-        for (let i = 0; i < bars; i++) {
-            const value = dataArray[i * step] / 255.0;
-            
-            // Color varía por fractal y por tiempo
-            const colorIndex = (i + fIndex + Math.floor(time * 8)) % VAPORWAVE_COLORS.length;
-            const color = VAPORWAVE_COLORS[colorIndex];
-            
-            ctx.fillStyle = color;
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2 + value * 3;
-
-            for (let j = 0; j < symmetry; j++) {
-                ctx.save();
-                ctx.rotate((Math.PI * 2 / symmetry) * j);
-                
-                const dist = 10 + i * 5; 
-                
-                // Puntos
-                const size = value * 15;
-                if (size > 1) {
-                    ctx.beginPath();
-                    ctx.arc(0, dist + value * 50, size, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                
-                // Conexiones (rayos)
-                if (value > 0.3) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, 10);
-                    ctx.lineTo(0, dist + value * 80);
-                    ctx.stroke();
-                }
-                ctx.restore();
-            }
-        }
+        // Selección de color cíclica pero única por entidad
+        const colorIndex = (Math.floor(time * 4) + f.colorOffset) % VAPORWAVE_COLORS.length;
+        const color = VAPORWAVE_COLORS[colorIndex];
         
-        // Núcleo brillante
-        ctx.fillStyle = "#fff";
-        ctx.beginPath();
-        ctx.arc(0, 0, 5 + bass * 10, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        
+        // --- DIBUJAR SEGÚN TIPO ---
+        switch(f.type) {
+            case 'circle':
+                ctx.beginPath();
+                ctx.arc(0, 0, 20 + bass * 10, 0, Math.PI * 2);
+                ctx.stroke();
+                if(bass > 0.5) { ctx.globalAlpha = 0.3; ctx.fill(); ctx.globalAlpha = 1.0; }
+                break;
+
+            case 'square':
+                ctx.beginPath();
+                const size = 30 + bass * 15;
+                ctx.rect(-size/2, -size/2, size, size);
+                ctx.stroke();
+                // Dibujar X interna
+                ctx.moveTo(-size/2, -size/2); ctx.lineTo(size/2, size/2);
+                ctx.moveTo(size/2, -size/2); ctx.lineTo(-size/2, size/2);
+                ctx.stroke();
+                break;
+
+            case 'triangle':
+                const tSize = 35 + bass * 10;
+                ctx.beginPath();
+                ctx.moveTo(0, -tSize);
+                ctx.lineTo(tSize, tSize);
+                ctx.lineTo(-tSize, tSize);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+
+            case 'cross':
+                const cSize = 40 + bass * 20;
+                ctx.beginPath();
+                ctx.moveTo(0, -cSize); ctx.lineTo(0, cSize);
+                ctx.moveTo(-cSize, 0); ctx.lineTo(cSize, 0);
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                break;
+
+            case 'mandala':
+                // El fractal complejo (simplificado un poco para rendimiento)
+                const bars = 8; 
+                const symmetry = 4; 
+                const step = Math.floor(bufferLength / bars);
+                
+                for (let i = 0; i < bars; i++) {
+                    const value = dataArray[i * step] / 255.0;
+                    ctx.lineWidth = 1 + value * 3;
+
+                    for (let j = 0; j < symmetry; j++) {
+                        ctx.save();
+                        ctx.rotate((Math.PI * 2 / symmetry) * j);
+                        const dist = 5 + i * 4; 
+                        const pSize = value * 10;
+                        
+                        if (pSize > 1) {
+                            ctx.beginPath();
+                            ctx.arc(0, dist + value * 30, pSize, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        ctx.restore();
+                    }
+                }
+                break;
+        }
 
         ctx.restore();
     });
@@ -382,10 +418,10 @@ export function ShrinkingBarGame() {
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D, delta: number) => {
       
-      // DIBUJAR FONDO DEMENTE
+      // 1. DIBUJAR CAOS DE FONDO
       drawVisualizerBg(ctx, delta);
 
-      // Screen Shake
+      // 2. Screen Shake
       ctx.save();
       if (screenShake > 0) {
         const dx = (Math.random() - 0.5) * screenShake;
@@ -431,7 +467,6 @@ export function ShrinkingBarGame() {
         updateCountdown(delta);
       }
 
-      // Pasamos delta a drawGame para mover los fractales
       drawGame(ctx, delta);
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
