@@ -28,7 +28,7 @@ export interface Player {
   alive: boolean;
   laneY: number;
   isAI?: boolean;
-  shields: number; // <--- NUEVO: Vidas extra
+  shields: number; 
 }
 
 export interface ScoreEntry {
@@ -54,11 +54,11 @@ interface ShrinkingBarState {
   // JUICE VARS
   screenShake: number;
   hitStop: number;
-  // ==========
 
   onPlayerEliminated: ((player: Player) => void) | null;
   onPlayerBounce: (() => void) | null;
-  onShieldBreak: (() => void) | null; // <--- NUEVO CALLBACK
+  onShieldBreak: (() => void) | null;
+  onPerfectPivot: ((player: Player) => void) | null; // <--- NUEVO CALLBACK
   onGameEnd: ((winner: Player | null) => void) | null;
   
   setGameMode: (mode: GameMode) => void;
@@ -82,7 +82,8 @@ interface ShrinkingBarState {
   setCallbacks: (callbacks: {
     onPlayerEliminated?: (player: Player) => void;
     onPlayerBounce?: () => void;
-    onShieldBreak?: () => void; // <--- NUEVO
+    onShieldBreak?: () => void;
+    onPerfectPivot?: (player: Player) => void; // <--- NUEVO
     onGameEnd?: (winner: Player | null) => void;
   }) => void;
 }
@@ -98,11 +99,10 @@ const COLORS = [
   "#A8D8EA",
 ];
 
-// Bajamos un poquito las velocidades base para ayudar también
 const SPEED_BY_DIFFICULTY: Record<Difficulty, number> = {
-  easy: 0.20,   // Antes 0.25
-  normal: 0.35, // Antes 0.40
-  hard: 0.55,   // Antes 0.60
+  easy: 0.20,
+  normal: 0.35,
+  hard: 0.55,
 };
 
 export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
@@ -124,6 +124,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   onPlayerEliminated: null,
   onPlayerBounce: null,
   onShieldBreak: null,
+  onPerfectPivot: null,
   onGameEnd: null,
 
   setGameMode: (mode: GameMode) => set({ gameMode: mode }),
@@ -136,6 +137,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     onPlayerEliminated: callbacks.onPlayerEliminated || null,
     onPlayerBounce: callbacks.onPlayerBounce || null,
     onShieldBreak: callbacks.onShieldBreak || null,
+    onPerfectPivot: callbacks.onPerfectPivot || null,
     onGameEnd: callbacks.onGameEnd || null,
   }),
 
@@ -162,7 +164,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       alive: true,
       laneY: 0,
       isAI: false,
-      shields: 1, // <--- JUGADORES EMPIEZAN CON 1 ESCUDO
+      shields: 1, 
     };
 
     const newUsedKeys = new Set(Array.from(state.usedKeys));
@@ -264,21 +266,14 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         const distanceToEdge = player.direction === 1 
           ? player.maxX - player.x 
           : player.x - player.minX;
-        // La IA falla a veces a propósito si es fácil, o reacciona perfecto si es difícil
-        // Aquí la dejamos simple
+        
         const reactionThreshold = 0.05 + Math.random() * 0.1;
         if (distanceToEdge < reactionThreshold) {
-           // IA Rebotando... (Lógica de recorte de la IA)
-           // ... (Mismo código de recorte IA de antes) ...
-           // Simplificado para no repetir todo el bloque gigante, 
-           // asumimos que la IA siempre juega "bien" o "input"
-           // Para este ejemplo copiamos la lógica de input básico de IA:
             let newMinX = player.minX;
             let newMaxX = player.maxX;
             if (player.direction === 1) newMaxX = player.x;
             else newMinX = player.x;
             
-            // Safety clamp
             const barWidth = newMaxX - newMinX;
             let newX = (newMinX + newMaxX) / 2;
             if (barWidth >= 0.04) {
@@ -301,24 +296,19 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
       const newX = player.x + currentSpeed * player.direction * delta;
       
-      // === DETECCIÓN DE COLISIÓN (MUERTE O ESCUDO) ===
       if (newX <= player.minX || newX >= player.maxX) {
-        
-        // ¿TIENE ESCUDO?
         if (player.shields > 0) {
             shieldBroken = true;
-            // Calcular posición segura para que no se quede pegado
             const safeX = newX <= player.minX ? player.minX + 0.02 : player.maxX - 0.02;
             
             return {
                 ...player,
                 x: safeX,
-                direction: (player.direction * -1) as 1 | -1, // Rebote automático
-                shields: player.shields - 1, // Pierde escudo
+                direction: (player.direction * -1) as 1 | -1, 
+                shields: player.shields - 1, 
                 speed: currentSpeed
             };
         } else {
-            // MUERTE REAL
             diedPlayer = player;
             return { ...player, alive: false, speed: currentSpeed };
         }
@@ -330,7 +320,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     set({ players: updatedPlayers });
 
     if (shieldBroken) {
-        set({ screenShake: 10, hitStop: 0.05 }); // Pequeño impacto al romper escudo
+        set({ screenShake: 10, hitStop: 0.05 }); 
         if (state.onShieldBreak) state.onShieldBreak();
     }
 
@@ -363,46 +353,59 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
     const player = state.players[playerIndex];
     
-    // Particulas al cortar
-    let explosionX = -1;
-    if (player.direction === 1) {
-        if (player.x < player.maxX) explosionX = (player.x + player.maxX) / 2;
-    } else {
-        if (player.x > player.minX) explosionX = (player.minX + player.x) / 2;
-    }
+    // === LÓGICA PERFECT PIVOT ===
+    const currentBarWidth = player.maxX - player.minX;
+    
+    // Distancia al borde hacia donde me muevo
+    const distanceToTarget = player.direction === 1 
+        ? player.maxX - player.x 
+        : player.x - player.minX;
 
-    if (explosionX !== -1) {
-        const laneY = 80 + playerIndex * 100 + 15;
-        const screenX = 50 + explosionX * 700;    
-        get().addParticles(screenX, laneY, player.color, 12);
-        set({ screenShake: 3 }); 
-    }
-
-    const GRACE_MARGIN = 0.02;
+    // Zona Perfecta: Último 20% de la barra
+    const isPerfect = distanceToTarget < (currentBarWidth * 0.20) && distanceToTarget > 0;
 
     let newMinX = player.minX;
     let newMaxX = player.maxX;
+    let perfectTriggered = false;
 
-    if (player.direction === 1) {
-      newMaxX = player.x;
+    if (isPerfect) {
+        // === PREMIO PERFECTO ===
+        // 1. NO cortamos la barra.
+        // 2. Expandimos la barra un 5% (recompensando el riesgo)
+        const expansion = 0.05;
+        newMinX = Math.max(0, player.minX - expansion);
+        newMaxX = Math.min(1, player.maxX + expansion);
+        
+        perfectTriggered = true;
+        // =======================
     } else {
-      newMinX = player.x;
+        // === COMPORTAMIENTO NORMAL (CORTAR) ===
+        if (player.direction === 1) {
+            newMaxX = player.x;
+        } else {
+            newMinX = player.x;
+        }
     }
 
+    // Safety clamps
     const barWidth = newMaxX - newMinX;
     let newX: number;
+    const GRACE_MARGIN = 0.02;
 
     if (barWidth < GRACE_MARGIN * 2) {
       newX = (newMinX + newMaxX) / 2;
     } else {
+      // Ajustamos X ligeramente para evitar pegarse al borde
       if (player.direction === 1) {
         newX = Math.max(newMinX + GRACE_MARGIN, player.x - GRACE_MARGIN);
       } else {
         newX = Math.min(newMaxX - GRACE_MARGIN, player.x + GRACE_MARGIN);
       }
     }
-
+    
+    // Asegurar que X esté dentro de los nuevos límites
     newX = Math.max(newMinX + 0.001, Math.min(newMaxX - 0.001, newX));
+
     const newDirection = player.direction === 1 ? -1 : 1;
 
     const updatedPlayers = [...state.players];
@@ -415,6 +418,25 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     };
 
     set({ players: updatedPlayers });
+
+    // === EFECTOS ===
+    if (perfectTriggered) {
+        set({ screenShake: 10 }); // Temblor especial de éxito
+        if (state.onPerfectPivot) state.onPerfectPivot(player);
+    } else {
+        // Partículas normales al cortar (si no fue perfecto)
+        // (El código de partículas anterior estaba aquí, lo recuperamos para el caso normal)
+        let explosionX = -1;
+        if (player.direction === 1 && player.x < player.maxX) explosionX = (player.x + player.maxX) / 2;
+        else if (player.direction === -1 && player.x > player.minX) explosionX = (player.minX + player.x) / 2;
+
+        if (explosionX !== -1) {
+            const laneY = 80 + playerIndex * 100 + 15;
+            const screenX = 50 + explosionX * 700;    
+            get().addParticles(screenX, laneY, player.color, 12);
+            set({ screenShake: 3 }); 
+        }
+    }
 
     if (state.onPlayerBounce) {
       state.onPlayerBounce();
@@ -486,7 +508,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       direction: (Math.random() > 0.5 ? 1 : -1) as 1 | -1,
       alive: true,
       speed: baseSpeed,
-      shields: 1, // <--- RESETEAR ESCUDOS EN REVANCHA
+      shields: 1, 
     }));
 
     set({
