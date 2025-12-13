@@ -1,0 +1,60 @@
+Contexto: Estamos en una Game Jam de 2 horas. Necesito crear un juego multijugador local en Love2D (Lua). Todo el código debe ir en main.lua para hacerlo simple.
+
+Mecánica Principal ("The Shrinking Bar"):
+
+Jugadores: De 2 a 4 jugadores en la misma pantalla.
+
+El Objeto: Cada jugador tiene una "línea" horizontal (su carril). Un cursor/punto se mueve automáticamente dentro de esa línea a una velocidad constante.
+
+Lose Condition: El cursor rebota SOLO si el jugador presiona su tecla. Si el cursor toca el borde actual de su línea (min o max) sin haber presionado la tecla, el jugador muere (eliminado).
+
+Action (La Mecánica de Corte):
+
+Cada jugador tiene UNA tecla asignada.
+
+Al presionar la tecla, la dirección del cursor se invierte.
+
+IMPORTANTE (Recorte): La parte de la línea hacia la que se movía el cursor desaparece.
+
+Si iba a la Derecha: El nuevo límite máximo (max_x) pasa a ser la posición actual del cursor.
+
+Si iba a la Izquierda: El nuevo límite mínimo (min_x) pasa a ser la posición actual del cursor.
+
+Esto hace que el área de juego sea cada vez más pequeña.
+
+Estados del Juego:
+
+State: 'LOBBY'
+
+Pantalla negra. Texto: "Presiona tu tecla para unirte".
+
+Detectar love.keypressed. Si una tecla no está en uso, crea un nuevo jugador y asígnale esa tecla y un color aleatorio.
+
+Presionar 'SPACE' para iniciar el juego (cambiar a state 'GAME').
+
+State: 'GAME'
+
+Iterar sobre los jugadores activos.
+
+Actualizar posición: x = x + speed * direction * dt.
+
+Verificar muerte: Si x < min_x o x > max_x, player.alive = false.
+
+Verificar victoria: Si queda solo 1 vivo (o 0), mostrar "Ganador" y permitir reiniciar con 'R'.
+
+Requisitos Técnicos:
+
+Usa tablas de Lua para manejar la lista de jugadores (players = {}).
+
+Usa love.graphics.rectangle para dibujar las barras (rellenas para la zona segura, contorno para la zona muerta/original si es posible visualmente).
+
+Maneja la entrada en love.keypressed(key).
+
+Guía Rápida para ustedes en el código
+Cuando Replit les genere el código, fíjense en esto para ajustarlo rápido:
+
+Velocidad: Busquen la variable speed en la tabla del jugador. Si el juego es muy lento, súbanle el número (ej: de 100 a 300).
+
+El "Límite Seguro": A veces la lógica del corte puede ser muy estricta y matarte al instante si aprietas la tecla justo en el borde.
+
+Truco: Pídanle a la AI (o háganlo a mano) que al cortar, deje un pequeño margen de "pixel de gracia" o simplemente que empuje al jugador 1 pixel en la dirección contraria para que no quede atrapado en el nuevo borde.
