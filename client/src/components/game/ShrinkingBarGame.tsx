@@ -8,6 +8,7 @@ const BAR_PADDING_X = 50;
 const CURSOR_RADIUS = 12;
 
 export function ShrinkingBarGame() {
+  const musicRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -34,6 +35,30 @@ export function ShrinkingBarGame() {
     setDifficulty,
     setCallbacks,
   } = useShrinkingBar();
+
+  useEffect(() => {
+    // 2. Cargar el audio (la ruta es relativa a la carpeta public)
+    musicRef.current = new Audio('/sounds/cat.mp3');
+    musicRef.current.loop = true; // ¡Que no pare nunca!
+    musicRef.current.volume = 0.4; // Ajusta el volumen (0.0 a 1.0)
+
+    // 3. Intentar reproducir (los navegadores a veces bloquean el audio automático)
+    const playMusic = async () => {
+      try {
+        await musicRef.current?.play();
+      } catch (err) {
+        console.log("Esperando interacción del usuario para reproducir música...");
+      }
+    };
+
+    playMusic();
+
+    // 4. Limpieza: Pausar si te sales del juego
+    return () => {
+      musicRef.current?.pause();
+      musicRef.current = null;
+    };
+  }, []); // El [] asegura que solo se ejecute al montar el componente
 
   useEffect(() => {
     hitSoundRef.current = new Audio("/sounds/hit.mp3");
