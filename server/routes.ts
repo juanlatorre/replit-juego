@@ -65,6 +65,9 @@ export function registerRoutes(app: Express): Server {
         } else if (msg.type === "REMATCH") {
           console.log(`🔄 Solicitud de revancha recibida.`);
           globalRoom.handleRematch();
+        } else if (msg.type === "SET_DIFFICULTY") {
+          console.log(`⚙️ Cambiando dificultad a: ${msg.difficulty}`);
+          globalRoom.setDifficulty(msg.difficulty);
         }
       } catch (e) {
         console.error("❌ Error procesando mensaje WS:", e);

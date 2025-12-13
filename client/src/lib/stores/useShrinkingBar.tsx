@@ -102,7 +102,16 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   onGameEnd: null,
 
   setGameMode: (mode: GameMode) => set({ gameMode: mode }),
-  setDifficulty: (difficulty: Difficulty) => set({ difficulty }),
+  setDifficulty: (difficulty: Difficulty) => {
+    const state = get();
+    if (state.connectionType === "online") {
+      // Send to server
+      if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+        state.socket.send(JSON.stringify({ type: "SET_DIFFICULTY", difficulty }));
+      }
+    }
+    set({ difficulty });
+  },
   toggleSpeedRamp: () =>
     set((state) => ({ speedRampEnabled: !state.speedRampEnabled })),
   setScreenShake: (amount: number) => set({ screenShake: amount }),
@@ -218,6 +227,11 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
         case "GAME_OVER":
           set({ gameState: "ended" });
+          break;
+
+        case "DIFFICULTY_CHANGED":
+          set({ difficulty: msg.difficulty });
+          console.log(`⚙️ Dificultad cambiada a: ${msg.difficulty}`);
           break;
       }
     };

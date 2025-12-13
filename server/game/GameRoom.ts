@@ -105,6 +105,17 @@ export class GameRoom {
     this.startGame();
   }
 
+  setDifficulty(newDifficulty: "easy" | "normal" | "hard") {
+    this.difficulty = newDifficulty;
+    console.log(`[Sala ${this.roomId}] ⚙️ Dificultad cambiada a: ${newDifficulty}`);
+
+    // Broadcast to all clients
+    this.broadcast({
+      type: "DIFFICULTY_CHANGED",
+      difficulty: newDifficulty
+    });
+  }
+
   handleInput(ws: WebSocket, type: string) {
     if (type === "START") {
       if (!this.isActive && this.players.length >= 2) {
