@@ -9,8 +9,8 @@ const CURSOR_RADIUS = 12;
 
 // CONFIGURACIÓN MATRIX VAPORWAVE
 const FONT_SIZE = 10; 
-const MATRIX_SPEED = 0.3; // Más lento (antes 1.0)
-const NUM_ENTITIES = 50; // ¡MUCHAS MÁS FIGURAS! (antes 6)
+const MATRIX_SPEED = 0.3; 
+const NUM_ENTITIES = 50; 
 
 const VAPORWAVE_COLORS = [
     "#FF71CE", // Rosa neón
@@ -29,9 +29,9 @@ interface FractalEntity {
     vy: number;
     sizeScale: number;
     phase: number;
-    type: ShapeType;      // Tipo de figura
-    rotationSpeed: number; // Velocidad de giro única
-    colorOffset: number;   // Para variar el color
+    type: ShapeType;      
+    rotationSpeed: number; 
+    colorOffset: number;   
 }
 
 export function ShrinkingBarGame() {
@@ -95,17 +95,16 @@ export function ShrinkingBarGame() {
       const types: ShapeType[] = ['mandala', 'circle', 'square', 'triangle', 'cross'];
 
       for(let i=0; i < NUM_ENTITIES; i++) {
-          // Probabilidades: Menos mandalas (son costosos), más figuras simples
           let type: ShapeType;
           const r = Math.random();
-          if (r < 0.1) type = 'mandala'; // 10% mandalas
+          if (r < 0.1) type = 'mandala'; 
           else type = types[Math.floor(Math.random() * types.length)];
 
           entities.push({
               x: Math.random() * CANVAS_WIDTH,
               y: Math.random() * CANVAS_HEIGHT,
-              vx: (Math.random() - 0.5) * 80, 
-              vy: (Math.random() - 0.5) * 80,
+              vx: (Math.random() - 0.5) * 100, // Velocidad inicial tranquila
+              vy: (Math.random() - 0.5) * 100,
               sizeScale: 0.3 + Math.random() * 0.7, 
               phase: Math.random() * Math.PI * 2,
               type: type,
@@ -198,14 +197,21 @@ export function ShrinkingBarGame() {
     });
   }, [setCallbacks]);
 
+  // === INPUT JUGADOR: AHORA CON FÍSICA VIOLENTA ===
   const handlePlayerInput = useCallback((key: string) => {
       storeHandlePlayerInput(key);
 
-      // CAOS: Impulso aleatorio a TODAS las figuras al interactuar
+      // CAOS EXTREMO: Cuando alguien juega, el fondo EXPLOTA en nuevas direcciones
       fractalsRef.current.forEach(f => {
-          f.vx = (Math.random() - 0.5) * 400; 
-          f.vy = (Math.random() - 0.5) * 400;
-          f.rotationSpeed = (Math.random() - 0.5) * 10; // También cambian giro
+          // Generamos una velocidad brutal (entre 800 y 2000 pixels por segundo)
+          const speed = 800 + Math.random() * 1200; 
+          const angle = Math.random() * Math.PI * 2; // Dirección totalmente aleatoria
+          
+          f.vx = Math.cos(angle) * speed;
+          f.vy = Math.sin(angle) * speed;
+          
+          // Giro también violento (entre -25 y 25 radianes por segundo)
+          f.rotationSpeed = (Math.random() - 0.5) * 50; 
       });
 
   }, [storeHandlePlayerInput]);
@@ -276,13 +282,11 @@ export function ShrinkingBarGame() {
         const color = VAPORWAVE_COLORS[Math.floor(Math.random() * VAPORWAVE_COLORS.length)];
         
         ctx.fillStyle = color;
-        // Math.floor para que no vibre al renderizar floats
         ctx.fillText(char, i * FONT_SIZE, Math.floor(drops[i]) * FONT_SIZE);
 
         if (drops[i] * FONT_SIZE > CANVAS_HEIGHT && Math.random() > 0.98) {
             drops[i] = 0;
         }
-        // VELOCIDAD REDUCIDA
         drops[i] += MATRIX_SPEED;
     }
   }, []);
@@ -321,22 +325,23 @@ export function ShrinkingBarGame() {
         // --- FÍSICA ---
         f.x += f.vx * delta;
         f.y += f.vy * delta;
-        f.phase += f.rotationSpeed * delta; // Rotación continua
+        f.phase += f.rotationSpeed * delta; 
 
-        if (f.x < -50) f.x = CANVAS_WIDTH + 50;
-        if (f.x > CANVAS_WIDTH + 50) f.x = -50;
-        if (f.y < -50) f.y = CANVAS_HEIGHT + 50;
-        if (f.y > CANVAS_HEIGHT + 50) f.y = -50;
+        // Rebote agresivo en bordes
+        if (f.x < -50) { f.x = -50; f.vx *= -1; }
+        if (f.x > CANVAS_WIDTH + 50) { f.x = CANVAS_WIDTH + 50; f.vx *= -1; }
+        if (f.y < -50) { f.y = -50; f.vy *= -1; }
+        if (f.y > CANVAS_HEIGHT + 50) { f.y = CANVAS_HEIGHT + 50; f.vy *= -1; }
         
         ctx.save();
         ctx.translate(f.x, f.y);
 
         // Zoom rítmico
-        const localScale = f.sizeScale * (1 + bass * 0.4); // Zoom al ritmo del bajo
+        const localScale = f.sizeScale * (1 + bass * 0.4); 
         ctx.scale(localScale, localScale);
-        ctx.rotate(f.phase + bass * Math.PI * 0.2); // Empujón extra al girar con el bajo
+        ctx.rotate(f.phase + bass * Math.PI * 0.2); 
 
-        // Selección de color cíclica pero única por entidad
+        // Selección de color cíclica
         const colorIndex = (Math.floor(time * 4) + f.colorOffset) % VAPORWAVE_COLORS.length;
         const color = VAPORWAVE_COLORS[colorIndex];
         
@@ -358,7 +363,6 @@ export function ShrinkingBarGame() {
                 const size = 30 + bass * 15;
                 ctx.rect(-size/2, -size/2, size, size);
                 ctx.stroke();
-                // Dibujar X interna
                 ctx.moveTo(-size/2, -size/2); ctx.lineTo(size/2, size/2);
                 ctx.moveTo(size/2, -size/2); ctx.lineTo(-size/2, size/2);
                 ctx.stroke();
@@ -384,7 +388,6 @@ export function ShrinkingBarGame() {
                 break;
 
             case 'mandala':
-                // El fractal complejo (simplificado un poco para rendimiento)
                 const bars = 8; 
                 const symmetry = 4; 
                 const step = Math.floor(bufferLength / bars);
@@ -417,11 +420,8 @@ export function ShrinkingBarGame() {
 
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D, delta: number) => {
-      
-      // 1. DIBUJAR CAOS DE FONDO
       drawVisualizerBg(ctx, delta);
 
-      // 2. Screen Shake
       ctx.save();
       if (screenShake > 0) {
         const dx = (Math.random() - 0.5) * screenShake;
