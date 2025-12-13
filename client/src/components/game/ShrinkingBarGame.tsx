@@ -25,13 +25,13 @@ export function ShrinkingBarGame() {
     particles,
     scores,
     speedRampEnabled,
-    countdown, // <--- NUEVO
+    countdown,
     joinPlayer,
     startGame,
     startPracticeGame,
     updatePlayers,
     updateParticles,
-    updateCountdown, // <--- NUEVO
+    updateCountdown,
     handlePlayerInput,
     resetGame,
     rematch,
@@ -41,10 +41,13 @@ export function ShrinkingBarGame() {
     setCallbacks,
   } = useShrinkingBar();
 
+  // === CONFIGURACIÓN DE MÚSICA DE FONDO ===
   useEffect(() => {
     musicRef.current = new Audio('/sounds/cat.mp3');
     musicRef.current.loop = true;
-    musicRef.current.volume = 0.4;
+    
+    // BAJAMOS EL VOLUMEN DE LA MÚSICA PARA QUE NO MOLESTE A LOS EFECTOS
+    musicRef.current.volume = 0.2; // Antes 0.4
 
     const playMusic = async () => {
       try {
@@ -62,23 +65,36 @@ export function ShrinkingBarGame() {
     };
   }, []);
 
+  // === CONFIGURACIÓN DE EFECTOS DE SONIDO (SFX) ===
   useEffect(() => {
     hitSoundRef.current = new Audio("/sounds/hit.mp3");
-    hitSoundRef.current.volume = 0.3;
+    hitSoundRef.current.volume = 0.3; // Volumen base para la muerte
+    
     successSoundRef.current = new Audio("/sounds/success.mp3");
     successSoundRef.current.volume = 0.5;
 
     setCallbacks({
       onPlayerEliminated: () => {
         if (hitSoundRef.current) {
+          // Sonido grave y normal para la eliminación
           hitSoundRef.current.currentTime = 0;
+          hitSoundRef.current.playbackRate = 1.0; 
+          hitSoundRef.current.volume = 0.4;
           hitSoundRef.current.play().catch(() => {});
         }
       },
       onPlayerBounce: () => {
+        // === SONIDO DE REBOTE (INPUT) ===
         if (hitSoundRef.current) {
           const bounce = hitSoundRef.current.cloneNode() as HTMLAudioElement;
-          bounce.volume = 0.15;
+          
+          // VOLUMEN ALTO PARA QUE DESTAQUE SOBRE LA MÚSICA (0.7 vs 0.2)
+          bounce.volume = 0.7; 
+          
+          bounce.playbackRate = 3.0; // Tono agudo ("chip")
+          // @ts-ignore
+          if (bounce.preservesPitch !== undefined) bounce.preservesPitch = false;
+          
           bounce.play().catch(() => {});
         }
       },
@@ -141,7 +157,6 @@ export function ShrinkingBarGame() {
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
       } else if (gameState === "countdown") {
-        // Dibujamos el juego estático de fondo y el número encima
         drawPlaying(ctx, players, particles); 
         drawCountdown(ctx, countdown);
       } else if (gameState === "ended") {
@@ -162,7 +177,6 @@ export function ShrinkingBarGame() {
       const delta = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 1000 : 0;
       lastTimeRef.current = timestamp;
 
-      // LÓGICA DE UPDATE
       if (gameState === "playing") {
         updatePlayers(delta);
         updateParticles(delta);
@@ -212,10 +226,7 @@ export function ShrinkingBarGame() {
   );
 }
 
-// === FUNCIONES DE DIBUJO ===
-
 function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
-  // Oscurecer un poco el fondo
   ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -228,9 +239,9 @@ function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
   ctx.shadowBlur = 20;
 
   if (value > 0) {
-    if (value === 3) ctx.fillStyle = "#FF6B6B";      // Rojo
-    else if (value === 2) ctx.fillStyle = "#FFE66D"; // Amarillo
-    else ctx.fillStyle = "#4ECDC4";                  // Verde/Cyan
+    if (value === 3) ctx.fillStyle = "#FF6B6B";
+    else if (value === 2) ctx.fillStyle = "#FFE66D";
+    else ctx.fillStyle = "#4ECDC4";
     
     ctx.fillText(value.toString(), CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
   } else {
@@ -239,7 +250,6 @@ function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
     ctx.fillText("GO!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
   }
 
-  // Reset shadow
   ctx.shadowBlur = 0;
 }
 
