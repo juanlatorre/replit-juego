@@ -21,8 +21,16 @@ interface ShrinkingBarState {
   nextParticleId: number;
   speedRampEnabled: boolean;
   countdown: number;
+
+  // Juice Vars
   screenShake: number;
   hitStop: number;
+
+  // === ONLINE VARS (NUEVO) ===
+  connectionType: "local" | "online";
+  socket: WebSocket | null;
+  myOnlineId: number | null;
+  // ==========================
 
   onPlayerEliminated: ((player: Player) => void) | null;
   onPlayerBounce: (() => void) | null;
@@ -48,6 +56,14 @@ interface ShrinkingBarState {
   updateParticles: (delta: number) => void;
   updateScores: (winner: Player) => void;
   resetScores: () => void;
+
+  // === ONLINE ACTIONS (NUEVO) ===
+  setConnectionType: (type: "local" | "online") => void;
+  connectOnline: () => void;
+  sendOnlineInput: () => void;
+  setScreenShake: (amount: number) => void; // Helper para el socket
+  // ==============================
+
   setCallbacks: (callbacks: {
     onPlayerEliminated?: (player: Player) => void;
     onPlayerBounce?: () => void;
@@ -72,6 +88,11 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   screenShake: 0,
   hitStop: 0,
 
+  // ONLINE DEFAULTS
+  connectionType: "local",
+  socket: null,
+  myOnlineId: null,
+
   onPlayerEliminated: null,
   onPlayerBounce: null,
   onShieldBreak: null,
@@ -82,6 +103,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   setDifficulty: (difficulty: Difficulty) => set({ difficulty }),
   toggleSpeedRamp: () =>
     set((state) => ({ speedRampEnabled: !state.speedRampEnabled })),
+  setScreenShake: (amount: number) => set({ screenShake: amount }),
 
   setCallbacks: (callbacks) =>
     set({
@@ -92,13 +114,111 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       onGameEnd: callbacks.onGameEnd || null,
     }),
 
+  // === ONLINE LOGIC ===
+  setConnectionType: (type) => {
+    if (type === "local") {
+      const socket = get().socket;
+      if (socket) socket.close();
+      set({ connectionType: "local", socket: null, myOnlineId: null });
+      get().resetGame();
+    } else {
+      set({ connectionType: "online" });
+      get().connectOnline();
+    }
+  },
+
+  connectOnline: () => {
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${protocol}://${window.location.host}/ws`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log("Conectado al servidor de juego");
+    };
+
+    socket.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      const state = get();
+
+      switch (msg.type) {
+        case "WELCOME":
+          set({ myOnlineId: msg.playerId });
+          break;
+
+        case "GAME_START":
+          set({ gameState: "playing", countdown: 0 });
+          break;
+
+        case "UPDATE":
+          // Sincronizar estado del servidor
+          const serverPlayers = msg.state.map((p: any) => ({
+            id: p.id,
+            key: `P${p.id}`,
+            color: p.color,
+            x: p.x,
+            minX: p.minX,
+            maxX: p.maxX,
+            alive: p.alive,
+            shields: p.shields,
+            direction: 1,
+            speed: 0,
+            laneY: 0,
+            isAI: false,
+          }));
+          set({ players: serverPlayers });
+          break;
+
+        case "EVENT":
+          if (msg.payload.name === "PERFECT") {
+            const p = { id: msg.payload.playerId, x: msg.payload.x } as Player;
+            if (state.onPerfectPivot) state.onPerfectPivot(p);
+            state.setScreenShake(10);
+          } else if (msg.payload.name === "BOUNCE") {
+            if (state.onPlayerBounce) state.onPlayerBounce();
+            const laneY = 80 + (msg.payload.playerId - 1) * 100 + 15;
+            const px = 50 + msg.payload.x * 700;
+            state.addParticles(px, laneY, msg.payload.color, 12);
+          } else if (msg.payload.name === "SHIELD_BREAK") {
+            if (state.onShieldBreak) state.onShieldBreak();
+            state.setScreenShake(5);
+          } else if (msg.payload.name === "DEATH") {
+            state.setScreenShake(20);
+            if (state.onPlayerEliminated)
+              state.onPlayerEliminated({ id: msg.payload.playerId } as Player);
+          }
+          break;
+
+        case "GAME_OVER":
+          set({ gameState: "ended" });
+          break;
+      }
+    };
+
+    set({ socket });
+  },
+
+  sendOnlineInput: () => {
+    const { socket, gameState } = get();
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      if (gameState === "lobby") {
+        socket.send(JSON.stringify({ type: "START" }));
+      } else if (gameState === "playing") {
+        socket.send(JSON.stringify({ type: "INPUT" }));
+      }
+    }
+  },
+  // ===================
+
   joinPlayer: (key: string) => {
     const state = get();
+    // En online no nos unimos localmente
+    if (state.connectionType === "online") return;
+
     if (state.gameState !== "lobby") return;
     if (state.usedKeys.has(key.toLowerCase())) return;
     if (state.players.length >= 4) return;
     if (
-      [" ", "escape", "r", "m", "1", "2", "3", "s", "l"].includes(
+      [" ", "escape", "r", "m", "1", "2", "3", "s", "l", "o"].includes(
         key.toLowerCase()
       )
     )
@@ -134,6 +254,11 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   startGame: () => {
     const state = get();
+    if (state.connectionType === "online") {
+      state.sendOnlineInput(); // START signal
+      return;
+    }
+
     if (state.gameState !== "lobby") return;
     if (state.players.length < 2) return;
     set({ gameState: "countdown", countdown: 3 });
@@ -141,6 +266,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   startPracticeGame: () => {
     const state = get();
+    if (state.connectionType === "online") return;
+
     if (state.gameState !== "lobby") return;
     if (state.players.length < 1) return;
 
@@ -170,6 +297,9 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   updateCountdown: (delta: number) => {
     const state = get();
+    // En online el servidor maneja el inicio
+    if (state.connectionType === "online") return;
+
     if (state.gameState !== "countdown") return;
     const newTime = state.countdown - delta;
     if (newTime <= 0) {
@@ -192,6 +322,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   updatePlayers: (delta: number) => {
     const state = get();
+
+    // SI ESTAMOS ONLINE, NO CALCULAMOS FÍSICA LOCAL
+    if (state.connectionType === "online") return;
+
     if (state.gameState !== "playing") return;
 
     let diedPlayer: Player | null = null;
@@ -284,6 +418,14 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   handlePlayerInput: (key: string) => {
     const state = get();
+
+    // MODO ONLINE: SOLO ENVIAR
+    if (state.connectionType === "online") {
+      state.sendOnlineInput();
+      return;
+    }
+
+    // MODO LOCAL
     if (state.gameState !== "playing") return;
 
     const playerIndex = state.players.findIndex(
@@ -363,6 +505,9 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   killPlayer: (playerId: number) => {
     const state = get();
+    // En online el server mata
+    if (state.connectionType === "online") return;
+
     const player = state.players.find((p) => p.id === playerId);
     const updatedPlayers = state.players.map((p) =>
       p.id === playerId ? { ...p, alive: false } : p
@@ -382,6 +527,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   checkWinner: () => {
     const state = get();
+    if (state.connectionType === "online") return;
+
     if (state.gameState !== "playing") return;
     const alivePlayers = state.players.filter((p) => p.alive);
     if (alivePlayers.length <= 1) {
@@ -408,6 +555,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   rematch: () => {
     const state = get();
+    if (state.connectionType === "online") return; // Server handles this
+
     const baseSpeed = SPEED_BY_DIFFICULTY[state.difficulty];
     const resetPlayers = state.players.map((p) => ({
       ...p,

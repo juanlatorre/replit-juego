@@ -1,3 +1,5 @@
+// client/src/lib/game/types.ts
+
 export type GameState = "lobby" | "countdown" | "playing" | "ended";
 export type GameMode = "multiplayer" | "practice";
 export type Difficulty = "easy" | "normal" | "hard";

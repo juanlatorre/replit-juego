@@ -5,6 +5,8 @@ import {
 } from "@/lib/game/constants";
 import { Difficulty, Player, ScoreEntry, FloatingText } from "@/lib/game/types";
 
+// ... (drawCountdown se mantiene igual) ...
+
 export function drawCountdown(
   ctx: CanvasRenderingContext2D,
   countdown: number
@@ -29,14 +31,16 @@ export function drawCountdown(
   ctx.shadowBlur = 0;
 }
 
+// === MODIFICADO: AHORA RECIBE connectionType ===
 export function drawLobby(
   ctx: CanvasRenderingContext2D,
   players: Player[],
   difficulty: Difficulty,
   scores: ScoreEntry[],
-  speedRampEnabled: boolean
+  speedRampEnabled: boolean,
+  connectionType: "local" | "online" // <--- NUEVO PARÁMETRO
 ) {
-  ctx.fillStyle = "rgba(0,0,0,0.3)"; // Transparencia para ver el fondo
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.fillRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
 
   ctx.shadowBlur = 10;
@@ -46,18 +50,26 @@ export function drawLobby(
   ctx.strokeRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
   ctx.shadowBlur = 0;
 
+  // TÍTULO DEL LOBBY SEGÚN MODO
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 24px monospace";
   ctx.textAlign = "center";
   ctx.shadowColor = VAPORWAVE_COLORS[3];
   ctx.shadowBlur = 10;
-  ctx.fillText("LOBBY", CANVAS_WIDTH / 2, 60);
+
+  const title = connectionType === "online" ? "ONLINE LOBBY" : "LOCAL LOBBY";
+  ctx.fillText(title, CANVAS_WIDTH / 2, 60);
   ctx.shadowBlur = 0;
 
   ctx.font = "14px monospace";
   ctx.fillStyle = "#aaaaaa";
-  ctx.fillText("PRESS ANY KEY TO JOIN", CANVAS_WIDTH / 2, 85);
+  const subText =
+    connectionType === "online"
+      ? "WAITING FOR OPPONENTS..."
+      : "PRESS ANY KEY TO JOIN";
+  ctx.fillText(subText, CANVAS_WIDTH / 2, 85);
 
+  // DIFICULTAD
   const diffColors: Record<Difficulty, string> = {
     easy: VAPORWAVE_COLORS[2],
     normal: VAPORWAVE_COLORS[4],
@@ -89,6 +101,7 @@ export function drawLobby(
     ctx.fillText(diffLabels[d], x + 45, 142);
   });
 
+  // OPCIONES
   const rampY = 165;
   ctx.font = "14px monospace";
   ctx.textAlign = "center";
@@ -103,6 +116,7 @@ export function drawLobby(
     ctx.fillText("Progressive Speed: OFF (S)", CANVAS_WIDTH / 2, rampY);
   }
 
+  // LISTA DE JUGADORES
   if (players.length > 0) {
     ctx.font = "16px monospace";
     players.forEach((player, index) => {
@@ -114,14 +128,19 @@ export function drawLobby(
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
-      ctx.fillText(
-        `P${player.id} - KEY: "${player.key.toUpperCase()}"`,
-        CANVAS_WIDTH / 2,
-        y + 8
-      );
+
+      const pName = player.isAI ? "AI BOT" : `PLAYER ${player.id}`;
+      // En Online no mostramos la tecla porque es irrelevante para los demás
+      const keyInfo =
+        connectionType === "local"
+          ? `- KEY: "${player.key.toUpperCase()}"`
+          : "";
+
+      ctx.fillText(`${pName} ${keyInfo}`, CANVAS_WIDTH / 2, y + 8);
     });
   }
 
+  // PUNTUACIONES
   if (scores.length > 0) {
     ctx.fillStyle = VAPORWAVE_COLORS[4];
     ctx.font = "bold 14px monospace";
@@ -138,6 +157,7 @@ export function drawLobby(
     });
   }
 
+  // INSTRUCCIONES INFERIORES
   if (players.length >= 2) {
     ctx.fillStyle = VAPORWAVE_COLORS[1];
     ctx.font = "bold 18px monospace";
@@ -167,6 +187,7 @@ export function drawLobby(
   }
 }
 
+// ... (drawEnded y drawFloatingTexts se mantienen igual) ...
 export function drawEnded(
   ctx: CanvasRenderingContext2D,
   winner: Player | null,
@@ -243,8 +264,7 @@ export function drawFloatingTexts(
   delta: number,
   texts: FloatingText[]
 ) {
-  // Filtrar muertos (mutación in-place del array ref pasado por el componente padre)
-  // Nota: En un entorno puramente funcional esto se haría diferente, pero para rendimiento en canvas esto está bien.
+  // Filtrar textos muertos (modificación in-place por eficiencia en render loop)
   for (let i = texts.length - 1; i >= 0; i--) {
     const t = texts[i];
     t.life -= delta * 1.5;

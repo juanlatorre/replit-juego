@@ -1,3 +1,4 @@
+// client/src/components/game/renderer/background.ts
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -71,7 +72,7 @@ export function drawVisualizerBg(
     f.y += f.vy * delta;
     f.phase += f.rotationSpeed * delta;
 
-    // Rebote
+    // Rebote agresivo
     if (f.x < -50) {
       f.x = -50;
       f.vx *= -1;

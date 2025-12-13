@@ -1,3 +1,4 @@
+// client/src/components/game/renderer/entities.ts
 import {
   BAR_HEIGHT,
   BAR_PADDING_X,

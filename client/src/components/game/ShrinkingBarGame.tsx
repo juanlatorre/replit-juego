@@ -1,21 +1,10 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useShrinkingBar } from "@/lib/stores/useShrinkingBar";
-import {
-  CANVAS_WIDTH,
-  CANVAS_HEIGHT,
-  FONT_SIZE,
-  NUM_ENTITIES,
-  BAR_PADDING_X,
-} from "@/lib/game/constants";
+import { CANVAS_WIDTH, CANVAS_HEIGHT, FONT_SIZE, NUM_ENTITIES, BAR_PADDING_X } from "@/lib/game/constants";
 import { FractalEntity, ShapeType, FloatingText } from "@/lib/game/types";
 import { drawVisualizerBg } from "./renderer/background";
 import { drawPlaying } from "./renderer/entities";
-import {
-  drawLobby,
-  drawCountdown,
-  drawEnded,
-  drawFloatingTexts,
-} from "./renderer/ui";
+import { drawLobby, drawCountdown, drawEnded, drawFloatingTexts } from "./renderer/ui";
 
 export function ShrinkingBarGame() {
   const musicRef = useRef<HTMLAudioElement | null>(null);
@@ -23,9 +12,7 @@ export function ShrinkingBarGame() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
 
-  const matrixDropsRef = useRef<number[]>(
-    Array(Math.floor(CANVAS_WIDTH / FONT_SIZE)).fill(1)
-  );
+  const matrixDropsRef = useRef<number[]>(Array(Math.floor(CANVAS_WIDTH / FONT_SIZE)).fill(1));
   const fractalsRef = useRef<FractalEntity[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
 
@@ -61,23 +48,20 @@ export function ShrinkingBarGame() {
     setDifficulty,
     toggleSpeedRamp,
     setCallbacks,
+    connectionType, // <--- TRAER ESTADO
+    setConnectionType // <--- TRAER FUNCIÓN
   } = useShrinkingBar();
 
+  // ... (INICIALIZACIÓN DE FRACTALES y AUDIO: Mismo código que antes) ...
   // === INICIALIZAR ENJAMBRE GEOMÉTRICO ===
   useEffect(() => {
     const entities: FractalEntity[] = [];
-    const types: ShapeType[] = [
-      "mandala",
-      "circle",
-      "square",
-      "triangle",
-      "cross",
-    ];
+    const types: ShapeType[] = ['mandala', 'circle', 'square', 'triangle', 'cross'];
 
     for (let i = 0; i < NUM_ENTITIES; i++) {
       let type: ShapeType;
       const r = Math.random();
-      if (r < 0.1) type = "mandala";
+      if (r < 0.1) type = 'mandala';
       else type = types[Math.floor(Math.random() * types.length)];
 
       entities.push({
@@ -89,7 +73,7 @@ export function ShrinkingBarGame() {
         phase: Math.random() * Math.PI * 2,
         type: type,
         rotationSpeed: (Math.random() - 0.5) * 2,
-        colorOffset: Math.floor(Math.random() * 100),
+        colorOffset: Math.floor(Math.random() * 100)
       });
     }
     fractalsRef.current = entities;
@@ -97,13 +81,12 @@ export function ShrinkingBarGame() {
 
   // === AUDIO SETUP ===
   useEffect(() => {
-    musicRef.current = new Audio("/sounds/cat.mp3");
+    musicRef.current = new Audio('/sounds/cat.mp3');
     musicRef.current.loop = true;
     musicRef.current.volume = 0.2;
 
     try {
-      const AudioContextClass =
-        window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioContextClass();
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -122,7 +105,7 @@ export function ShrinkingBarGame() {
 
     const playMusic = async () => {
       try {
-        if (audioContextRef.current?.state === "suspended") {
+        if (audioContextRef.current?.state === 'suspended') {
           await audioContextRef.current.resume();
         }
         await musicRef.current?.play();
@@ -152,7 +135,7 @@ export function ShrinkingBarGame() {
           hitSoundRef.current.currentTime = 0;
           hitSoundRef.current.playbackRate = 1.0;
           hitSoundRef.current.volume = 0.4;
-          hitSoundRef.current.play().catch(() => {});
+          hitSoundRef.current.play().catch(() => { });
         }
       },
       onPlayerBounce: () => {
@@ -160,9 +143,8 @@ export function ShrinkingBarGame() {
           const bounce = hitSoundRef.current.cloneNode() as HTMLAudioElement;
           bounce.volume = 0.7;
           bounce.playbackRate = 3.0;
-          if ((bounce as any).preservesPitch !== undefined)
-            (bounce as any).preservesPitch = false;
-          bounce.play().catch(() => {});
+          if ((bounce as any).preservesPitch !== undefined) (bounce as any).preservesPitch = false;
+          bounce.play().catch(() => { });
         }
       },
       onShieldBreak: () => {
@@ -170,21 +152,19 @@ export function ShrinkingBarGame() {
           const bounce = hitSoundRef.current.cloneNode() as HTMLAudioElement;
           bounce.volume = 0.5;
           bounce.playbackRate = 0.5;
-          bounce.play().catch(() => {});
+          bounce.play().catch(() => { });
         }
       },
       onPerfectPivot: (player) => {
         if (successSoundRef.current) {
-          const perfectSnd =
-            successSoundRef.current.cloneNode() as HTMLAudioElement;
+          const perfectSnd = successSoundRef.current.cloneNode() as HTMLAudioElement;
           perfectSnd.volume = 0.8;
           perfectSnd.playbackRate = 1.2;
-          perfectSnd.play().catch(() => {});
+          perfectSnd.play().catch(() => { });
         }
 
         const laneY = 80 + (player.id - 1) * 100 + 15;
-        const playerXPx =
-          BAR_PADDING_X + player.x * (CANVAS_WIDTH - BAR_PADDING_X * 2);
+        const playerXPx = BAR_PADDING_X + player.x * (CANVAS_WIDTH - BAR_PADDING_X * 2);
 
         floatingTextsRef.current.push({
           x: playerXPx,
@@ -192,45 +172,38 @@ export function ShrinkingBarGame() {
           text: "PERFECT!",
           life: 1.0,
           color: "#FFD700",
-          size: 24,
+          size: 24
         });
       },
       onGameEnd: (winner) => {
         if (winner && successSoundRef.current) {
           successSoundRef.current.currentTime = 0;
-          successSoundRef.current.play().catch(() => {});
+          successSoundRef.current.play().catch(() => { });
         }
       },
     });
   }, [setCallbacks]);
 
-  const handlePlayerInput = useCallback(
-    (key: string) => {
-      storeHandlePlayerInput(key);
-      fractalsRef.current.forEach((f) => {
-        const speed = 800 + Math.random() * 1200;
-        const angle = Math.random() * Math.PI * 2;
-        f.vx = Math.cos(angle) * speed;
-        f.vy = Math.sin(angle) * speed;
-        f.rotationSpeed = (Math.random() - 0.5) * 50;
-      });
-    },
-    [storeHandlePlayerInput]
-  );
+  const handlePlayerInput = useCallback((key: string) => {
+    storeHandlePlayerInput(key);
+    fractalsRef.current.forEach(f => {
+      const speed = 800 + Math.random() * 1200;
+      const angle = Math.random() * Math.PI * 2;
+      f.vx = Math.cos(angle) * speed;
+      f.vy = Math.sin(angle) * speed;
+      f.rotationSpeed = (Math.random() - 0.5) * 50;
+    });
+  }, [storeHandlePlayerInput]);
 
   const handleKeyDown = useCallback(
     async (e: KeyboardEvent) => {
       const key = e.key;
 
-      if (audioContextRef.current?.state === "suspended") {
-        try {
-          await audioContextRef.current.resume();
-        } catch (e) {}
+      if (audioContextRef.current?.state === 'suspended') {
+        try { await audioContextRef.current.resume(); } catch (e) { }
       }
       if (musicRef.current?.paused) {
-        try {
-          await musicRef.current.play();
-        } catch (e) {}
+        try { await musicRef.current.play(); } catch (e) { }
       }
 
       if (gameState === "lobby") {
@@ -238,10 +211,10 @@ export function ShrinkingBarGame() {
         else if (key === "2") setDifficulty("normal");
         else if (key === "3") setDifficulty("hard");
         else if (key.toLowerCase() === "s") toggleSpeedRamp();
+        else if (key.toLowerCase() === "o") setConnectionType(connectionType === 'local' ? 'online' : 'local'); // TOGGLE TECLA
         else if (key === " " && players.length >= 2) startGame();
-        else if (key.toLowerCase() === "m" && players.length >= 1)
-          startPracticeGame();
-        else if (key !== " " && key.toLowerCase() !== "m") joinPlayer(key);
+        else if (key.toLowerCase() === "m" && players.length >= 1) startPracticeGame();
+        else if (key !== " " && key.toLowerCase() !== "m" && key.toLowerCase() !== "o") joinPlayer(key);
       } else if (gameState === "playing") {
         handlePlayerInput(key);
       } else if (gameState === "ended") {
@@ -250,20 +223,7 @@ export function ShrinkingBarGame() {
         else if (key.toLowerCase() === "c") resetScores();
       }
     },
-    [
-      gameState,
-      players.length,
-      difficulty,
-      joinPlayer,
-      startGame,
-      startPracticeGame,
-      handlePlayerInput,
-      resetGame,
-      rematch,
-      resetScores,
-      setDifficulty,
-      toggleSpeedRamp,
-    ]
+    [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, rematch, resetScores, setDifficulty, toggleSpeedRamp, connectionType, setConnectionType]
   );
 
   useEffect(() => {
@@ -273,15 +233,7 @@ export function ShrinkingBarGame() {
 
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D, delta: number) => {
-      // 1. Fondo (Visualizador + Matrix + Fractales)
-      drawVisualizerBg(
-        ctx,
-        delta,
-        analyserRef.current,
-        dataArrayRef.current,
-        fractalsRef.current,
-        matrixDropsRef.current
-      );
+      drawVisualizerBg(ctx, delta, analyserRef.current, dataArrayRef.current, fractalsRef.current, matrixDropsRef.current);
 
       ctx.save();
       if (screenShake > 0) {
@@ -290,9 +242,9 @@ export function ShrinkingBarGame() {
         ctx.translate(dx, dy);
       }
 
-      // 2. Capas de Juego
       if (gameState === "lobby") {
-        drawLobby(ctx, players, difficulty, scores, speedRampEnabled);
+        // === PASAMOS EL TIPO DE CONEXIÓN AL RENDER ===
+        drawLobby(ctx, players, difficulty, scores, speedRampEnabled, connectionType);
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
         drawFloatingTexts(ctx, delta, floatingTextsRef.current);
@@ -305,17 +257,7 @@ export function ShrinkingBarGame() {
 
       ctx.restore();
     },
-    [
-      gameState,
-      players,
-      winner,
-      particles,
-      difficulty,
-      scores,
-      speedRampEnabled,
-      countdown,
-      screenShake,
-    ]
+    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled, countdown, screenShake, connectionType]
   );
 
   const gameLoop = useCallback(
@@ -325,9 +267,7 @@ export function ShrinkingBarGame() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const delta = lastTimeRef.current
-        ? (timestamp - lastTimeRef.current) / 1000
-        : 0;
+      const delta = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 1000 : 0;
       lastTimeRef.current = timestamp;
 
       updateJuice(delta);
@@ -344,15 +284,7 @@ export function ShrinkingBarGame() {
       drawGame(ctx, delta);
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     },
-    [
-      gameState,
-      updatePlayers,
-      updateParticles,
-      updateCountdown,
-      drawGame,
-      updateJuice,
-      hitStop,
-    ]
+    [gameState, updatePlayers, updateParticles, updateCountdown, drawGame, updateJuice, hitStop]
   );
 
   useEffect(() => {
@@ -361,48 +293,69 @@ export function ShrinkingBarGame() {
   }, [gameLoop]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-black">
-      <h1
-        className="text-4xl font-bold text-white mb-4"
-        style={{ textShadow: "0 0 10px #FF71CE, 0 0 20px #01CDFE" }}
-      >
-        The Shrinking Bar
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden select-none">
+      
+      <div className="scanlines"></div>
+      <div className="screen-glow"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-cyan-900/20 pointer-events-none" />
+
+      <h1 className="z-10 text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#FF71CE] via-[#01CDFE] to-[#05FFA1] mb-6 animate-pulse drop-shadow-[0_0_15px_rgba(255,113,206,0.6)]"
+          style={{ letterSpacing: '-2px' }}>
+        THE SHRINKING BAR
       </h1>
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="border-2 border-gray-700 rounded-lg"
-        style={{
-          boxShadow:
-            "0 0 30px rgba(255, 113, 206, 0.3), 0 0 10px rgba(1, 205, 254, 0.3)",
-        }}
-      />
-      <div className="mt-4 text-gray-400 text-sm text-center font-mono">
+
+      <div className="z-20 relative group">
+        <div className="absolute -inset-1 bg-gradient-to-r from-[#FF71CE] via-[#B967FF] to-[#01CDFE] rounded-lg opacity-50 group-hover:opacity-100 blur transition duration-500 animate-tilt"></div>
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          className="relative rounded-lg border-2 border-white/10 bg-black shadow-[0_0_50px_rgba(0,0,0,0.5)] cursor-none"
+        />
+        
+        {/* === BOTÓN PARA CAMBIAR DE MODO === */}
         {gameState === "lobby" && (
-          <>
-            <p>PRESS ANY KEY TO JOIN | SPACE TO START (MIN 2 PLAYERS)</p>
-            <p className="mt-1 text-xs text-pink-400">
-              M: PRACTICE MODE | 1-3: DIFFICULTY | S: PROGRESSIVE SPEED
-            </p>
-          </>
-        )}
-        {gameState === "countdown" && (
-          <p className="text-yellow-400 font-bold text-xl animate-pulse">
-            GET READY!
-          </p>
-        )}
-        {gameState === "playing" && (
-          <p className="text-cyan-400">
-            PRESS YOUR ASSIGNED KEY TO BOUNCE AND SHRINK
-          </p>
-        )}
-        {gameState === "ended" && (
-          <p className="text-purple-400">
-            R: REMATCH | L: LOBBY | C: CLEAR SCORES
-          </p>
+          <div className="absolute top-4 right-4 flex gap-2">
+              <button 
+                onClick={() => setConnectionType(connectionType === 'local' ? 'online' : 'local')}
+                className={`px-4 py-2 rounded font-bold border transition-all duration-300 hover:scale-105 ${
+                  connectionType === 'online' 
+                  ? 'bg-green-500/20 border-green-500 text-green-400 shadow-[0_0_15px_green]' 
+                  : 'bg-gray-800/80 border-gray-600 text-gray-300 hover:bg-gray-700'
+              }`}>
+                  {connectionType === 'online' ? '● ONLINE MODE' : '○ LOCAL MODE'}
+              </button>
+          </div>
         )}
       </div>
+
+      <div className="z-20 mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-[800px] text-xs md:text-sm font-mono tracking-wide">
+        
+        <div className="bg-black/40 backdrop-blur-md border border-[#01CDFE]/30 p-4 rounded-xl shadow-[0_0_15px_rgba(1,205,254,0.1)] text-[#01CDFE]">
+            <h3 className="font-bold text-white mb-2 border-b border-white/10 pb-1">STATUS</h3>
+            {gameState === "lobby" && <p className="animate-pulse"> WAITING FOR PLAYERS...</p>}
+            {gameState === "playing" && <p className="text-[#05FFA1]"> GAME IN PROGRESS</p>}
+            {gameState === "ended" && <p className="text-[#FF71CE]"> GAME OVER</p>}
+            <p className="mt-2 text-gray-400">CONNECTION: {connectionType.toUpperCase()}</p>
+        </div>
+
+        <div className="bg-black/40 backdrop-blur-md border border-[#FF71CE]/30 p-4 rounded-xl shadow-[0_0_15px_rgba(255,113,206,0.1)] text-[#FF71CE]">
+            <h3 className="font-bold text-white mb-2 border-b border-white/10 pb-1">CONTROLS</h3>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-300">
+                <span>[ANY KEY]</span> <span className="text-right">JOIN</span>
+                <span>[SPACE]</span> <span className="text-right">START</span>
+                <span>[O]</span> <span className="text-right text-yellow-300">SWITCH MODE</span>
+                <span>[S]</span> <span className="text-right">TOGGLE SPEED</span>
+                <span>[M]</span> <span className="text-right">PRACTICE (AI)</span>
+            </div>
+        </div>
+
+      </div>
+      
+      <div className="z-10 mt-4 text-gray-600 text-xs font-mono">
+        v2.5.0 // ONLINE MULTIPLAYER ENABLED
+      </div>
+
     </div>
   );
 }

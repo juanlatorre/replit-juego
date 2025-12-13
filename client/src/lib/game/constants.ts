@@ -1,11 +1,13 @@
+// client/src/lib/game/constants.ts
+
 export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 500;
 export const BAR_HEIGHT = 30;
 export const BAR_PADDING_X = 50;
 export const CURSOR_RADIUS = 12;
 
-// Configuración Matrix / Vaporwave
-export const FONT_SIZE = 10;
+// Configuración Visual (Matrix / Vaporwave)
+export const FONT_SIZE = 20; // Aumentado como pediste
 export const MATRIX_SPEED = 0.3;
 export const NUM_ENTITIES = 50;
 
