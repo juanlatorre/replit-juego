@@ -47,12 +47,14 @@ interface ShrinkingBarState {
   particles: Particle[];
   scores: ScoreEntry[];
   nextParticleId: number;
+  speedRampEnabled: boolean; // <--- NUEVO
   onPlayerEliminated: ((player: Player) => void) | null;
   onPlayerBounce: (() => void) | null;
   onGameEnd: ((winner: Player | null) => void) | null;
   
   setGameMode: (mode: GameMode) => void;
   setDifficulty: (difficulty: Difficulty) => void;
+  toggleSpeedRamp: () => void; // <--- NUEVO
   joinPlayer: (key: string) => void;
   startGame: () => void;
   startPracticeGame: () => void;
@@ -99,6 +101,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   particles: [],
   scores: [],
   nextParticleId: 0,
+  speedRampEnabled: false, // <--- NUEVO (por defecto apagado)
   onPlayerEliminated: null,
   onPlayerBounce: null,
   onGameEnd: null,
@@ -106,6 +109,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   setGameMode: (mode: GameMode) => set({ gameMode: mode }),
   
   setDifficulty: (difficulty: Difficulty) => set({ difficulty }),
+
+  toggleSpeedRamp: () => set((state) => ({ speedRampEnabled: !state.speedRampEnabled })), // <--- NUEVO
 
   setCallbacks: (callbacks) => set({
     onPlayerEliminated: callbacks.onPlayerEliminated || null,
@@ -118,7 +123,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (state.gameState !== "lobby") return;
     if (state.usedKeys.has(key.toLowerCase())) return;
     if (state.players.length >= 4) return;
-    if (key === " " || key === "Escape" || key === "r" || key === "R" || key === "m" || key === "M" || key === "1" || key === "2" || key === "3") return;
+    // Bloquear teclas reservadas incluyendo la 'S'
+    if ([" ", "escape", "r", "m", "1", "2", "3", "s"].includes(key.toLowerCase())) return;
 
     const playerIndex = state.players.length;
     const color = COLORS[playerIndex % COLORS.length];
@@ -187,9 +193,20 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (state.gameState !== "playing") return;
 
     let diedPlayer: Player | null = null;
+    
+    // Configuración de aceleración
+    const ACCELERATION_PER_SECOND = 0.03; // Aumenta velocidad
+    const MAX_SPEED = 2.0; // Tope máximo
 
     const updatedPlayers = state.players.map((player) => {
       if (!player.alive) return player;
+
+      // === LÓGICA DE AUMENTO DE VELOCIDAD ===
+      let currentSpeed = player.speed;
+      if (state.speedRampEnabled && currentSpeed < MAX_SPEED) {
+        currentSpeed += ACCELERATION_PER_SECOND * delta;
+      }
+      // ======================================
 
       if (player.isAI) {
         const distanceToEdge = player.direction === 1 
@@ -225,18 +242,19 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
             maxX: newMaxX,
             x: newX,
             direction: (player.direction === 1 ? -1 : 1) as 1 | -1,
+            speed: currentSpeed // Actualizar velocidad en la IA también
           };
         }
       }
 
-      const newX = player.x + player.speed * player.direction * delta;
+      const newX = player.x + currentSpeed * player.direction * delta; // Usar currentSpeed
       
       if (newX <= player.minX || newX >= player.maxX) {
         diedPlayer = player;
-        return { ...player, alive: false };
+        return { ...player, alive: false, speed: currentSpeed };
       }
 
-      return { ...player, x: newX };
+      return { ...player, x: newX, speed: currentSpeed };
     });
 
     set({ players: updatedPlayers });
