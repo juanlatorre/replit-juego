@@ -47,14 +47,14 @@ interface ShrinkingBarState {
   particles: Particle[];
   scores: ScoreEntry[];
   nextParticleId: number;
-  speedRampEnabled: boolean; // <--- NUEVO
+  speedRampEnabled: boolean;
   onPlayerEliminated: ((player: Player) => void) | null;
   onPlayerBounce: (() => void) | null;
   onGameEnd: ((winner: Player | null) => void) | null;
   
   setGameMode: (mode: GameMode) => void;
   setDifficulty: (difficulty: Difficulty) => void;
-  toggleSpeedRamp: () => void; // <--- NUEVO
+  toggleSpeedRamp: () => void;
   joinPlayer: (key: string) => void;
   startGame: () => void;
   startPracticeGame: () => void;
@@ -63,6 +63,7 @@ interface ShrinkingBarState {
   killPlayer: (playerId: number) => void;
   checkWinner: () => void;
   resetGame: () => void;
+  rematch: () => void; // <--- NUEVA FUNCIÓN
   addParticles: (x: number, y: number, color: string, count: number) => void;
   updateParticles: (delta: number) => void;
   updateScores: (winner: Player) => void;
@@ -101,7 +102,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   particles: [],
   scores: [],
   nextParticleId: 0,
-  speedRampEnabled: false, // <--- NUEVO (por defecto apagado)
+  speedRampEnabled: false,
   onPlayerEliminated: null,
   onPlayerBounce: null,
   onGameEnd: null,
@@ -110,7 +111,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   
   setDifficulty: (difficulty: Difficulty) => set({ difficulty }),
 
-  toggleSpeedRamp: () => set((state) => ({ speedRampEnabled: !state.speedRampEnabled })), // <--- NUEVO
+  toggleSpeedRamp: () => set((state) => ({ speedRampEnabled: !state.speedRampEnabled })),
 
   setCallbacks: (callbacks) => set({
     onPlayerEliminated: callbacks.onPlayerEliminated || null,
@@ -123,8 +124,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (state.gameState !== "lobby") return;
     if (state.usedKeys.has(key.toLowerCase())) return;
     if (state.players.length >= 4) return;
-    // Bloquear teclas reservadas incluyendo la 'S'
-    if ([" ", "escape", "r", "m", "1", "2", "3", "s"].includes(key.toLowerCase())) return;
+    // Bloqueamos teclas reservadas (ahora incluimos 'l' también)
+    if ([" ", "escape", "r", "m", "1", "2", "3", "s", "l"].includes(key.toLowerCase())) return;
 
     const playerIndex = state.players.length;
     const color = COLORS[playerIndex % COLORS.length];
@@ -195,18 +196,16 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     let diedPlayer: Player | null = null;
     
     // Configuración de aceleración
-    const ACCELERATION_PER_SECOND = 0.03; // Aumenta velocidad
-    const MAX_SPEED = 2.0; // Tope máximo
+    const ACCELERATION_PER_SECOND = 0.03;
+    const MAX_SPEED = 2.0;
 
     const updatedPlayers = state.players.map((player) => {
       if (!player.alive) return player;
 
-      // === LÓGICA DE AUMENTO DE VELOCIDAD ===
       let currentSpeed = player.speed;
       if (state.speedRampEnabled && currentSpeed < MAX_SPEED) {
         currentSpeed += ACCELERATION_PER_SECOND * delta;
       }
-      // ======================================
 
       if (player.isAI) {
         const distanceToEdge = player.direction === 1 
@@ -242,12 +241,12 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
             maxX: newMaxX,
             x: newX,
             direction: (player.direction === 1 ? -1 : 1) as 1 | -1,
-            speed: currentSpeed // Actualizar velocidad en la IA también
+            speed: currentSpeed
           };
         }
       }
 
-      const newX = player.x + currentSpeed * player.direction * delta; // Usar currentSpeed
+      const newX = player.x + currentSpeed * player.direction * delta;
       
       if (newX <= player.minX || newX >= player.maxX) {
         diedPlayer = player;
@@ -387,6 +386,32 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       gameMode: "multiplayer",
     });
   },
+
+  // === NUEVA FUNCIÓN: REMATCH (REVANCHA) ===
+  rematch: () => {
+    const state = get();
+    const baseSpeed = SPEED_BY_DIFFICULTY[state.difficulty];
+
+    // Reseteamos a los jugadores actuales a su estado inicial
+    const resetPlayers = state.players.map(p => ({
+      ...p,
+      x: 0.5,
+      minX: 0,
+      maxX: 1,
+      direction: (Math.random() > 0.5 ? 1 : -1) as 1 | -1, // Dirección aleatoria al empezar
+      alive: true,
+      speed: baseSpeed // Importante: Resetear la velocidad base
+    }));
+
+    set({
+      gameState: "playing",
+      players: resetPlayers,
+      winner: null,
+      particles: [],
+      // Mantenemos los scores y los nombres/teclas
+    });
+  },
+  // =========================================
 
   addParticles: (x: number, y: number, color: string, count: number) => {
     const state = get();
