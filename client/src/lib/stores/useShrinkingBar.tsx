@@ -1,42 +1,13 @@
 import { create } from "zustand";
-
-export type GameState = "lobby" | "countdown" | "playing" | "ended";
-export type GameMode = "multiplayer" | "practice";
-export type Difficulty = "easy" | "normal" | "hard";
-
-export interface Particle {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  color: string;
-  life: number;
-  maxLife: number;
-  size: number;
-}
-
-export interface Player {
-  id: number;
-  key: string;
-  color: string;
-  x: number;
-  minX: number;
-  maxX: number;
-  direction: 1 | -1;
-  speed: number;
-  alive: boolean;
-  laneY: number;
-  isAI?: boolean;
-  shields: number; 
-}
-
-export interface ScoreEntry {
-  playerId: number;
-  key: string;
-  color: string;
-  wins: number;
-}
+import {
+  GameState,
+  GameMode,
+  Difficulty,
+  Player,
+  Particle,
+  ScoreEntry,
+} from "@/lib/game/types";
+import { PLAYER_COLORS, SPEED_BY_DIFFICULTY } from "@/lib/game/constants";
 
 interface ShrinkingBarState {
   gameState: GameState;
@@ -50,8 +21,6 @@ interface ShrinkingBarState {
   nextParticleId: number;
   speedRampEnabled: boolean;
   countdown: number;
-  
-  // JUICE VARS
   screenShake: number;
   hitStop: number;
 
@@ -60,7 +29,7 @@ interface ShrinkingBarState {
   onShieldBreak: (() => void) | null;
   onPerfectPivot: ((player: Player) => void) | null;
   onGameEnd: ((winner: Player | null) => void) | null;
-  
+
   setGameMode: (mode: GameMode) => void;
   setDifficulty: (difficulty: Difficulty) => void;
   toggleSpeedRamp: () => void;
@@ -88,23 +57,6 @@ interface ShrinkingBarState {
   }) => void;
 }
 
-const COLORS = [
-  "#FF6B6B",
-  "#4ECDC4",
-  "#FFE66D",
-  "#95E1D3",
-  "#F38181",
-  "#AA96DA",
-  "#FCBAD3",
-  "#A8D8EA",
-];
-
-const SPEED_BY_DIFFICULTY: Record<Difficulty, number> = {
-  easy: 0.20,
-  normal: 0.35,
-  hard: 0.55,
-};
-
 export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   gameState: "lobby",
   gameMode: "multiplayer",
@@ -117,7 +69,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   nextParticleId: 0,
   speedRampEnabled: false,
   countdown: 0,
-  
   screenShake: 0,
   hitStop: 0,
 
@@ -128,30 +79,35 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   onGameEnd: null,
 
   setGameMode: (mode: GameMode) => set({ gameMode: mode }),
-  
   setDifficulty: (difficulty: Difficulty) => set({ difficulty }),
+  toggleSpeedRamp: () =>
+    set((state) => ({ speedRampEnabled: !state.speedRampEnabled })),
 
-  toggleSpeedRamp: () => set((state) => ({ speedRampEnabled: !state.speedRampEnabled })),
-
-  setCallbacks: (callbacks) => set({
-    onPlayerEliminated: callbacks.onPlayerEliminated || null,
-    onPlayerBounce: callbacks.onPlayerBounce || null,
-    onShieldBreak: callbacks.onShieldBreak || null,
-    onPerfectPivot: callbacks.onPerfectPivot || null,
-    onGameEnd: callbacks.onGameEnd || null,
-  }),
+  setCallbacks: (callbacks) =>
+    set({
+      onPlayerEliminated: callbacks.onPlayerEliminated || null,
+      onPlayerBounce: callbacks.onPlayerBounce || null,
+      onShieldBreak: callbacks.onShieldBreak || null,
+      onPerfectPivot: callbacks.onPerfectPivot || null,
+      onGameEnd: callbacks.onGameEnd || null,
+    }),
 
   joinPlayer: (key: string) => {
     const state = get();
     if (state.gameState !== "lobby") return;
     if (state.usedKeys.has(key.toLowerCase())) return;
     if (state.players.length >= 4) return;
-    if ([" ", "escape", "r", "m", "1", "2", "3", "s", "l"].includes(key.toLowerCase())) return;
+    if (
+      [" ", "escape", "r", "m", "1", "2", "3", "s", "l"].includes(
+        key.toLowerCase()
+      )
+    )
+      return;
 
     const playerIndex = state.players.length;
-    const color = COLORS[playerIndex % COLORS.length];
+    const color = PLAYER_COLORS[playerIndex % PLAYER_COLORS.length];
     const speed = SPEED_BY_DIFFICULTY[state.difficulty];
-    
+
     const newPlayer: Player = {
       id: playerIndex + 1,
       key: key.toLowerCase(),
@@ -164,7 +120,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       alive: true,
       laneY: 0,
       isAI: false,
-      shields: 1, 
+      shields: 1,
     };
 
     const newUsedKeys = new Set(Array.from(state.usedKeys));
@@ -180,7 +136,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     const state = get();
     if (state.gameState !== "lobby") return;
     if (state.players.length < 2) return;
-
     set({ gameState: "countdown", countdown: 3 });
   },
 
@@ -216,9 +171,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   updateCountdown: (delta: number) => {
     const state = get();
     if (state.gameState !== "countdown") return;
-    
     const newTime = state.countdown - delta;
-    
     if (newTime <= 0) {
       set({ gameState: "playing", countdown: 0 });
     } else {
@@ -228,17 +181,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   updateJuice: (delta: number) => {
     const state = get();
-    
     let newShake = state.screenShake;
-    if (newShake > 0) {
-      newShake = Math.max(0, newShake - delta * 60); 
-    }
-
+    if (newShake > 0) newShake = Math.max(0, newShake - delta * 60);
     let newHitStop = state.hitStop;
-    if (newHitStop > 0) {
-      newHitStop = Math.max(0, newHitStop - delta);
-    }
-
+    if (newHitStop > 0) newHitStop = Math.max(0, newHitStop - delta);
     if (newShake !== state.screenShake || newHitStop !== state.hitStop) {
       set({ screenShake: newShake, hitStop: newHitStop });
     }
@@ -250,7 +196,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
     let diedPlayer: Player | null = null;
     let shieldBroken = false;
-
     const ACCELERATION_PER_SECOND = 0.03;
     const MAX_SPEED = 2.0;
 
@@ -263,80 +208,76 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       }
 
       if (player.isAI) {
-        const distanceToEdge = player.direction === 1 
-          ? player.maxX - player.x 
-          : player.x - player.minX;
-        
+        const distanceToEdge =
+          player.direction === 1
+            ? player.maxX - player.x
+            : player.x - player.minX;
         const reactionThreshold = 0.05 + Math.random() * 0.1;
         if (distanceToEdge < reactionThreshold) {
-            let newMinX = player.minX;
-            let newMaxX = player.maxX;
-            if (player.direction === 1) newMaxX = player.x;
-            else newMinX = player.x;
-            
-            const barWidth = newMaxX - newMinX;
-            let newX = (newMinX + newMaxX) / 2;
-            if (barWidth >= 0.04) {
-               newX = player.direction === 1 
-                  ? Math.max(newMinX + 0.02, player.x - 0.02)
-                  : Math.min(newMaxX - 0.02, player.x + 0.02);
-            }
-            newX = Math.max(newMinX + 0.001, Math.min(newMaxX - 0.001, newX));
+          let newMinX = player.minX;
+          let newMaxX = player.maxX;
+          if (player.direction === 1) newMaxX = player.x;
+          else newMinX = player.x;
 
-            return {
-                ...player,
-                minX: newMinX,
-                maxX: newMaxX,
-                x: newX,
-                direction: (player.direction === 1 ? -1 : 1) as 1 | -1,
-                speed: currentSpeed
-            };
+          const barWidth = newMaxX - newMinX;
+          let newX = (newMinX + newMaxX) / 2;
+          if (barWidth >= 0.04) {
+            newX =
+              player.direction === 1
+                ? Math.max(newMinX + 0.02, player.x - 0.02)
+                : Math.min(newMaxX - 0.02, player.x + 0.02);
+          }
+          newX = Math.max(newMinX + 0.001, Math.min(newMaxX - 0.001, newX));
+
+          return {
+            ...player,
+            minX: newMinX,
+            maxX: newMaxX,
+            x: newX,
+            direction: (player.direction === 1 ? -1 : 1) as 1 | -1,
+            speed: currentSpeed,
+          };
         }
       }
 
       const newX = player.x + currentSpeed * player.direction * delta;
-      
+
       if (newX <= player.minX || newX >= player.maxX) {
         if (player.shields > 0) {
-            shieldBroken = true;
-            const safeX = newX <= player.minX ? player.minX + 0.02 : player.maxX - 0.02;
-            
-            return {
-                ...player,
-                x: safeX,
-                direction: (player.direction * -1) as 1 | -1, 
-                shields: player.shields - 1, 
-                speed: currentSpeed
-            };
+          shieldBroken = true;
+          const safeX =
+            newX <= player.minX ? player.minX + 0.02 : player.maxX - 0.02;
+          return {
+            ...player,
+            x: safeX,
+            direction: (player.direction * -1) as 1 | -1,
+            shields: player.shields - 1,
+            speed: currentSpeed,
+          };
         } else {
-            diedPlayer = player;
-            return { ...player, alive: false, speed: currentSpeed };
+          diedPlayer = player;
+          return { ...player, alive: false, speed: currentSpeed };
         }
       }
-
       return { ...player, x: newX, speed: currentSpeed };
     });
 
     set({ players: updatedPlayers });
 
     if (shieldBroken) {
-        set({ screenShake: 10, hitStop: 0.05 }); 
-        if (state.onShieldBreak) state.onShieldBreak();
+      set({ screenShake: 10, hitStop: 0.05 });
+      if (state.onShieldBreak) state.onShieldBreak();
     }
 
     if (diedPlayer !== null) {
       const deadPlayer = diedPlayer as Player;
-      const laneIndex = state.players.findIndex(p => p.id === deadPlayer.id);
+      const laneIndex = state.players.findIndex((p) => p.id === deadPlayer.id);
       const laneY = 80 + laneIndex * 100 + 15;
       const barWidth = 700;
       const cursorX = 50 + deadPlayer.x * barWidth;
       get().addParticles(cursorX, laneY, deadPlayer.color, 20);
-      
-      set({ screenShake: 20, hitStop: 0.15 }); 
-
-      if (state.onPlayerEliminated) {
-        state.onPlayerEliminated(deadPlayer);
-      }
+      set({ screenShake: 20, hitStop: 0.15 });
+      if (state.onPlayerEliminated) state.onPlayerEliminated(deadPlayer);
     }
     get().checkWinner();
   },
@@ -348,39 +289,28 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     const playerIndex = state.players.findIndex(
       (p) => p.key === key.toLowerCase() && p.alive && !p.isAI
     );
-    
     if (playerIndex === -1) return;
 
     const player = state.players[playerIndex];
-    
-    // === LÓGICA PERFECT PIVOT ===
     const currentBarWidth = player.maxX - player.minX;
-    
-    const distanceToTarget = player.direction === 1 
-        ? player.maxX - player.x 
-        : player.x - player.minX;
+    const distanceToTarget =
+      player.direction === 1 ? player.maxX - player.x : player.x - player.minX;
 
-    // AHORA ES SOLO EL 8% (HARDCORE MODE)
-    const isPerfect = distanceToTarget < (currentBarWidth * 0.08) && distanceToTarget > 0;
+    const isPerfect =
+      distanceToTarget < currentBarWidth * 0.08 && distanceToTarget > 0;
 
     let newMinX = player.minX;
     let newMaxX = player.maxX;
     let perfectTriggered = false;
 
     if (isPerfect) {
-        // PREMIO PERFECTO
-        const expansion = 0.05;
-        newMinX = Math.max(0, player.minX - expansion);
-        newMaxX = Math.min(1, player.maxX + expansion);
-        
-        perfectTriggered = true;
+      const expansion = 0.05;
+      newMinX = Math.max(0, player.minX - expansion);
+      newMaxX = Math.min(1, player.maxX + expansion);
+      perfectTriggered = true;
     } else {
-        // COMPORTAMIENTO NORMAL
-        if (player.direction === 1) {
-            newMaxX = player.x;
-        } else {
-            newMinX = player.x;
-        }
+      if (player.direction === 1) newMaxX = player.x;
+      else newMinX = player.x;
     }
 
     const barWidth = newMaxX - newMinX;
@@ -396,9 +326,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         newX = Math.min(newMaxX - GRACE_MARGIN, player.x + GRACE_MARGIN);
       }
     }
-    
     newX = Math.max(newMinX + 0.001, Math.min(newMaxX - 0.001, newX));
-
     const newDirection = player.direction === 1 ? -1 : 1;
 
     const updatedPlayers = [...state.players];
@@ -413,46 +341,41 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     set({ players: updatedPlayers });
 
     if (perfectTriggered) {
-        set({ screenShake: 10 }); 
-        if (state.onPerfectPivot) state.onPerfectPivot(player);
+      set({ screenShake: 10 });
+      if (state.onPerfectPivot) state.onPerfectPivot(player);
     } else {
-        let explosionX = -1;
-        if (player.direction === 1 && player.x < player.maxX) explosionX = (player.x + player.maxX) / 2;
-        else if (player.direction === -1 && player.x > player.minX) explosionX = (player.minX + player.x) / 2;
+      let explosionX = -1;
+      if (player.direction === 1 && player.x < player.maxX)
+        explosionX = (player.x + player.maxX) / 2;
+      else if (player.direction === -1 && player.x > player.minX)
+        explosionX = (player.minX + player.x) / 2;
 
-        if (explosionX !== -1) {
-            const laneY = 80 + playerIndex * 100 + 15;
-            const screenX = 50 + explosionX * 700;    
-            get().addParticles(screenX, laneY, player.color, 12);
-            set({ screenShake: 3 }); 
-        }
+      if (explosionX !== -1) {
+        const laneY = 80 + playerIndex * 100 + 15;
+        const screenX = 50 + explosionX * 700;
+        get().addParticles(screenX, laneY, player.color, 12);
+        set({ screenShake: 3 });
+      }
     }
 
-    if (state.onPlayerBounce) {
-      state.onPlayerBounce();
-    }
+    if (state.onPlayerBounce) state.onPlayerBounce();
   },
 
   killPlayer: (playerId: number) => {
     const state = get();
-    const player = state.players.find(p => p.id === playerId);
+    const player = state.players.find((p) => p.id === playerId);
     const updatedPlayers = state.players.map((p) =>
       p.id === playerId ? { ...p, alive: false } : p
     );
     set({ players: updatedPlayers });
-
     if (player) {
-      const laneIndex = state.players.findIndex(p => p.id === playerId);
+      const laneIndex = state.players.findIndex((p) => p.id === playerId);
       const laneY = 80 + laneIndex * 100 + 15;
       const barWidth = 700;
       const cursorX = 50 + player.x * barWidth;
       get().addParticles(cursorX, laneY, player.color, 20);
-
       set({ screenShake: 20, hitStop: 0.15 });
-
-      if (state.onPlayerEliminated) {
-        state.onPlayerEliminated(player);
-      }
+      if (state.onPlayerEliminated) state.onPlayerEliminated(player);
     }
     get().checkWinner();
   },
@@ -463,13 +386,9 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     const alivePlayers = state.players.filter((p) => p.alive);
     if (alivePlayers.length <= 1) {
       const winner = alivePlayers.length === 1 ? alivePlayers[0] : null;
-      if (winner && !winner.isAI) {
-        get().updateScores(winner);
-      }
+      if (winner && !winner.isAI) get().updateScores(winner);
       set({ gameState: "ended", winner });
-      if (state.onGameEnd) {
-        state.onGameEnd(winner);
-      }
+      if (state.onGameEnd) state.onGameEnd(winner);
     }
   },
 
@@ -490,7 +409,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   rematch: () => {
     const state = get();
     const baseSpeed = SPEED_BY_DIFFICULTY[state.difficulty];
-    const resetPlayers = state.players.map(p => ({
+    const resetPlayers = state.players.map((p) => ({
       ...p,
       x: 0.5,
       minX: 0,
@@ -498,9 +417,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       direction: (Math.random() > 0.5 ? 1 : -1) as 1 | -1,
       alive: true,
       speed: baseSpeed,
-      shields: 1, 
+      shields: 1,
     }));
-
     set({
       gameState: "countdown",
       players: resetPlayers,
