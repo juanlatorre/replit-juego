@@ -58,7 +58,7 @@ interface ShrinkingBarState {
   onPlayerEliminated: ((player: Player) => void) | null;
   onPlayerBounce: (() => void) | null;
   onShieldBreak: (() => void) | null;
-  onPerfectPivot: ((player: Player) => void) | null; // <--- NUEVO CALLBACK
+  onPerfectPivot: ((player: Player) => void) | null;
   onGameEnd: ((winner: Player | null) => void) | null;
   
   setGameMode: (mode: GameMode) => void;
@@ -83,7 +83,7 @@ interface ShrinkingBarState {
     onPlayerEliminated?: (player: Player) => void;
     onPlayerBounce?: () => void;
     onShieldBreak?: () => void;
-    onPerfectPivot?: (player: Player) => void; // <--- NUEVO
+    onPerfectPivot?: (player: Player) => void;
     onGameEnd?: (winner: Player | null) => void;
   }) => void;
 }
@@ -356,30 +356,26 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     // === LÓGICA PERFECT PIVOT ===
     const currentBarWidth = player.maxX - player.minX;
     
-    // Distancia al borde hacia donde me muevo
     const distanceToTarget = player.direction === 1 
         ? player.maxX - player.x 
         : player.x - player.minX;
 
-    // Zona Perfecta: Último 20% de la barra
-    const isPerfect = distanceToTarget < (currentBarWidth * 0.20) && distanceToTarget > 0;
+    // AHORA ES SOLO EL 8% (HARDCORE MODE)
+    const isPerfect = distanceToTarget < (currentBarWidth * 0.08) && distanceToTarget > 0;
 
     let newMinX = player.minX;
     let newMaxX = player.maxX;
     let perfectTriggered = false;
 
     if (isPerfect) {
-        // === PREMIO PERFECTO ===
-        // 1. NO cortamos la barra.
-        // 2. Expandimos la barra un 5% (recompensando el riesgo)
+        // PREMIO PERFECTO
         const expansion = 0.05;
         newMinX = Math.max(0, player.minX - expansion);
         newMaxX = Math.min(1, player.maxX + expansion);
         
         perfectTriggered = true;
-        // =======================
     } else {
-        // === COMPORTAMIENTO NORMAL (CORTAR) ===
+        // COMPORTAMIENTO NORMAL
         if (player.direction === 1) {
             newMaxX = player.x;
         } else {
@@ -387,7 +383,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         }
     }
 
-    // Safety clamps
     const barWidth = newMaxX - newMinX;
     let newX: number;
     const GRACE_MARGIN = 0.02;
@@ -395,7 +390,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (barWidth < GRACE_MARGIN * 2) {
       newX = (newMinX + newMaxX) / 2;
     } else {
-      // Ajustamos X ligeramente para evitar pegarse al borde
       if (player.direction === 1) {
         newX = Math.max(newMinX + GRACE_MARGIN, player.x - GRACE_MARGIN);
       } else {
@@ -403,7 +397,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       }
     }
     
-    // Asegurar que X esté dentro de los nuevos límites
     newX = Math.max(newMinX + 0.001, Math.min(newMaxX - 0.001, newX));
 
     const newDirection = player.direction === 1 ? -1 : 1;
@@ -419,13 +412,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
     set({ players: updatedPlayers });
 
-    // === EFECTOS ===
     if (perfectTriggered) {
-        set({ screenShake: 10 }); // Temblor especial de éxito
+        set({ screenShake: 10 }); 
         if (state.onPerfectPivot) state.onPerfectPivot(player);
     } else {
-        // Partículas normales al cortar (si no fue perfecto)
-        // (El código de partículas anterior estaba aquí, lo recuperamos para el caso normal)
         let explosionX = -1;
         if (player.direction === 1 && player.x < player.maxX) explosionX = (player.x + player.maxX) / 2;
         else if (player.direction === -1 && player.x > player.minX) explosionX = (player.minX + player.x) / 2;
