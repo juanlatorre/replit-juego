@@ -8,7 +8,14 @@ const BAR_PADDING_X = 50;
 const CURSOR_RADIUS = 12;
 
 export function ShrinkingBarGame() {
+  // === REFS PARA AUDIO Y VISUALIZADOR ===
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  // Necesitamos referencias para la Web Audio API para no perderlas entre renders
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  // ======================================
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -26,13 +33,9 @@ export function ShrinkingBarGame() {
     scores,
     speedRampEnabled,
     countdown,
-    
-    // === JUICY VARS ===
     screenShake,
     hitStop,
     updateJuice,
-    // =================
-
     joinPlayer,
     startGame,
     startPracticeGame,
@@ -48,13 +51,46 @@ export function ShrinkingBarGame() {
     setCallbacks,
   } = useShrinkingBar();
 
+  // === CONFIGURACIÓN DE MÚSICA Y WEB AUDIO API (VISUALIZADOR) ===
   useEffect(() => {
+    // 1. Crear el elemento de audio normal
     musicRef.current = new Audio('/sounds/cat.mp3');
     musicRef.current.loop = true;
     musicRef.current.volume = 0.2;
 
+    // 2. Configurar Web Audio API para el análisis
+    try {
+      // Soporte para Safari y otros navegadores
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      
+      // Crear el analizador
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256; // Define la resolución (debe ser potencia de 2). 256 = 128 barras.
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      // Conectar el elemento de audio al analizador y este a las bocinas
+      const source = audioCtx.createMediaElementSource(musicRef.current);
+      source.connect(analyser);
+      analyser.connect(audioCtx.destination);
+
+      // Guardar en refs
+      audioContextRef.current = audioCtx;
+      analyserRef.current = analyser;
+      dataArrayRef.current = dataArray;
+
+    } catch (e) {
+      console.warn("Web Audio API no soportada o falló al inicializar:", e);
+    }
+
     const playMusic = async () => {
       try {
+        // Es crucial reanudar el contexto de audio si está suspendido por el navegador
+        if (audioContextRef.current?.state === 'suspended') {
+           await audioContextRef.current.resume();
+        }
         await musicRef.current?.play();
       } catch (err) {
         console.log("Esperando interacción del usuario para reproducir música...");
@@ -66,8 +102,10 @@ export function ShrinkingBarGame() {
     return () => {
       musicRef.current?.pause();
       musicRef.current = null;
+      audioContextRef.current?.close(); // Limpiar contexto al desmontar
     };
   }, []);
+  // =============================================================
 
   useEffect(() => {
     hitSoundRef.current = new Audio("/sounds/hit.mp3");
@@ -104,8 +142,17 @@ export function ShrinkingBarGame() {
   }, [setCallbacks]);
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+    async (e: KeyboardEvent) => { // Hacemos esto async para intentar arrancar el audio
       const key = e.key;
+
+      // INTENTO DE INICIAR AUDIO EN CUALQUIER TECLA SI NO HA EMPEZADO
+      if (audioContextRef.current?.state === 'suspended') {
+         try { await audioContextRef.current.resume(); } catch(e) {}
+      }
+      if (musicRef.current?.paused) {
+         try { await musicRef.current.play(); } catch(e) {}
+      }
+      // -----------------------------------------------------------
 
       if (gameState === "lobby") {
         if (key === "1") {
@@ -143,19 +190,72 @@ export function ShrinkingBarGame() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
+  // === NUEVA FUNCIÓN PARA DIBUJAR EL FONDO VISUALIZADOR ===
+  const drawVisualizerBg = useCallback((ctx: CanvasRenderingContext2D) => {
+    const analyser = analyserRef.current;
+    const dataArray = dataArrayRef.current;
+
+    // Si no hay audio listo, dibujar fondo negro y salir
+    if (!analyser || !dataArray) {
+        ctx.fillStyle = "#0a0a0a";
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        return;
+    }
+
+    // 1. Obtener datos de frecuencia actuales (0-255 por banda)
+    analyser.getByteFrequencyData(dataArray);
+
+    // 2. Dibujar un fondo base muy oscuro (casi negro)
+    ctx.fillStyle = "#050505"; 
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // 3. Configurar dibujo de barras
+    const bufferLength = dataArray.length;
+    // Hacemos las barras un poco más anchas para que se vean bien
+    const barWidth = (CANVAS_WIDTH / bufferLength) * 2.5; 
+    let x = 0;
+
+    // Crear un gradiente sutil para las barras (Teal a Rojo, muy transparente)
+    const gradient = ctx.createLinearGradient(0, CANVAS_HEIGHT, 0, CANVAS_HEIGHT / 3);
+    gradient.addColorStop(0, 'rgba(78, 205, 196, 0.25)'); // Color base (teal)
+    gradient.addColorStop(1, 'rgba(255, 107, 107, 0.05)'); // Punta (rojo)
+
+    ctx.fillStyle = gradient;
+
+    for (let i = 0; i < bufferLength; i++) {
+        // Valor entre 0 y 255
+        const value = dataArray[i];
+        
+        // Escalamos la altura. Si el valor es 255, la altura será 1/3 de la pantalla.
+        // Esto es para que sea sutil y no tape el juego.
+        const barHeight = (value / 255) * (CANVAS_HEIGHT / 2.5);
+
+        // Dibujar barra desde abajo
+        ctx.fillRect(x, CANVAS_HEIGHT - barHeight, barWidth, barHeight);
+
+        x += barWidth + 1; // +1 para un pequeño espacio entre barras
+    }
+  }, []);
+  // ========================================================
+
+
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D) => {
-      ctx.fillStyle = "#0a0a0a";
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      
+      // === REEMPLAZADO: Fondo negro estático ===
+      // ctx.fillStyle = "#0a0a0a";
+      // ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // === APLICAR SCREEN SHAKE (TEMBLOR) ===
+      // === NUEVO: Dibujar fondo visualizador ===
+      drawVisualizerBg(ctx);
+      // =======================================
+
       ctx.save();
       if (screenShake > 0) {
         const dx = (Math.random() - 0.5) * screenShake;
         const dy = (Math.random() - 0.5) * screenShake;
         ctx.translate(dx, dy);
       }
-      // =====================================
 
       if (gameState === "lobby") {
         drawLobby(ctx, players, difficulty, scores, speedRampEnabled);
@@ -168,10 +268,10 @@ export function ShrinkingBarGame() {
         drawEnded(ctx, winner, scores);
       }
 
-      // Restaurar el contexto (quitar el shake para el siguiente frame)
       ctx.restore();
     },
-    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled, countdown, screenShake]
+    // Añadir drawVisualizerBg a dependencias
+    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled, countdown, screenShake, drawVisualizerBg]
   );
 
   const gameLoop = useCallback(
@@ -185,17 +285,13 @@ export function ShrinkingBarGame() {
       const delta = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 1000 : 0;
       lastTimeRef.current = timestamp;
 
-      // === ACTUALIZAR JUICE (Decaer shake y hitstop) ===
       updateJuice(delta);
-      // ===============================================
 
       if (gameState === "playing") {
-        // === HIT STOP: SOLO ACTUALIZAR SI NO ESTAMOS EN PAUSA ===
         if (hitStop <= 0) {
           updatePlayers(delta);
           updateParticles(delta);
         }
-        // ======================================================
       } else if (gameState === "countdown") {
         updateCountdown(delta);
       }
@@ -376,12 +472,10 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
   players.forEach((player, index) => {
     const laneY = 80 + index * 100;
 
-    // === EFECTO NEÓN EN BARRAS ===
     if (player.alive) {
         ctx.shadowBlur = 15;
         ctx.shadowColor = player.color;
     }
-    // ============================
 
     ctx.strokeStyle = "#333333";
     ctx.lineWidth = 2;
@@ -418,11 +512,10 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
       ctx.fillStyle = "#000000";
       ctx.fill();
 
-      // Apagamos neón para que no afecte a textos si hubiera
       ctx.shadowBlur = 0;
 
     } else {
-      ctx.shadowBlur = 0; // Aseguramos que esté apagado
+      ctx.shadowBlur = 0;
       ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
       ctx.fillRect(BAR_PADDING_X, laneY, barWidth, BAR_HEIGHT);
       
@@ -440,10 +533,8 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
   });
 
   particles.forEach((particle) => {
-    // === EFECTO NEÓN EN PARTÍCULAS ===
     ctx.shadowBlur = 10;
     ctx.shadowColor = particle.color;
-    // ================================
 
     ctx.globalAlpha = particle.life / particle.maxLife;
     ctx.fillStyle = particle.color;
@@ -451,7 +542,6 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
     ctx.arc(particle.x, particle.y, particle.size * (particle.life / particle.maxLife), 0, Math.PI * 2);
     ctx.fill();
     
-    // Apagamos neón
     ctx.shadowBlur = 0;
   });
   ctx.globalAlpha = 1;
@@ -464,7 +554,6 @@ function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores:
 
   if (winner) {
     ctx.fillStyle = winner.color;
-    // Neón para el ganador también
     ctx.shadowBlur = 20;
     ctx.shadowColor = winner.color;
     
