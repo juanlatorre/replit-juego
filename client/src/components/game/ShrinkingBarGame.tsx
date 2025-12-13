@@ -24,7 +24,7 @@ export function ShrinkingBarGame() {
     winner,
     particles,
     scores,
-    speedRampEnabled, // <--- NUEVO
+    speedRampEnabled,
     joinPlayer,
     startGame,
     startPracticeGame,
@@ -32,9 +32,10 @@ export function ShrinkingBarGame() {
     updateParticles,
     handlePlayerInput,
     resetGame,
+    rematch, // <--- Importamos rematch
     resetScores,
     setDifficulty,
-    toggleSpeedRamp, // <--- NUEVO
+    toggleSpeedRamp,
     setCallbacks,
   } = useShrinkingBar();
 
@@ -99,7 +100,7 @@ export function ShrinkingBarGame() {
           setDifficulty("normal");
         } else if (key === "3") {
           setDifficulty("hard");
-        } else if (key.toLowerCase() === "s") { // <--- NUEVO: Tecla S
+        } else if (key.toLowerCase() === "s") {
           toggleSpeedRamp();
         } else if (key === " " && players.length >= 2) {
           startGame();
@@ -112,13 +113,16 @@ export function ShrinkingBarGame() {
         handlePlayerInput(key);
       } else if (gameState === "ended") {
         if (key.toLowerCase() === "r") {
-          resetGame();
+          rematch(); // <--- R para revancha (mismos jugadores)
+        } else if (key.toLowerCase() === "l") {
+          resetGame(); // <--- L para volver al lobby (menu)
         } else if (key.toLowerCase() === "c") {
           resetScores();
         }
       }
     },
-    [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, resetScores, setDifficulty, toggleSpeedRamp]
+    // Añadimos rematch a las dependencias
+    [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, rematch, resetScores, setDifficulty, toggleSpeedRamp]
   );
 
   useEffect(() => {
@@ -132,7 +136,7 @@ export function ShrinkingBarGame() {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       if (gameState === "lobby") {
-        drawLobby(ctx, players, difficulty, scores, speedRampEnabled); // <--- NUEVO: Pasamos speedRampEnabled
+        drawLobby(ctx, players, difficulty, scores, speedRampEnabled);
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
       } else if (gameState === "ended") {
@@ -190,7 +194,7 @@ export function ShrinkingBarGame() {
           <p>Presiona tu tecla asignada para rebotar y recortar tu barra</p>
         )}
         {gameState === "ended" && (
-          <p>R para reiniciar | C para borrar puntuaciones</p>
+          <p>R: Revancha (Mismos jugadores) | L: Lobby/Menu | C: Borrar Puntuaciones</p>
         )}
       </div>
     </div>
@@ -233,7 +237,6 @@ function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty:
     ctx.fillText(diffLabels[d], x + 45, 122);
   });
 
-  // === DIBUJAR ESTADO DE VELOCIDAD ===
   const rampY = 145;
   ctx.font = "14px Inter, sans-serif";
   ctx.textAlign = "center";
@@ -244,12 +247,11 @@ function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty:
     ctx.fillStyle = "#444444";
     ctx.fillText("Velocidad Progresiva: OFF (S)", CANVAS_WIDTH / 2, rampY);
   }
-  // ===================================
 
   if (players.length > 0) {
     ctx.font = "16px Inter, sans-serif";
     players.forEach((player, index) => {
-      const y = 170 + index * 45; // Ajusté un poco la Y para dar espacio al nuevo texto
+      const y = 170 + index * 45;
       
       ctx.fillStyle = player.color;
       ctx.fillRect(CANVAS_WIDTH / 2 - 140, y - 12, 280, 35);
@@ -400,7 +402,8 @@ function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores:
     });
   }
 
+  // === NUEVA UI DE TEXTO ===
   ctx.fillStyle = "#4ECDC4";
   ctx.font = "18px Inter, sans-serif";
-  ctx.fillText("R para reiniciar | C para borrar puntuaciones", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 40);
+  ctx.fillText("R: Revancha (Mismos jugadores) | L: Lobby/Menu | C: Borrar Puntuaciones", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 40);
 }
