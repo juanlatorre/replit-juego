@@ -58,7 +58,7 @@ export function ShrinkingBarGame() {
   useEffect(() => {
     musicRef.current = new Audio('/sounds/cat.mp3');
     musicRef.current.loop = true;
-    musicRef.current.volume = 0.2; // Volumen bajo para dejar espacio a SFX
+    musicRef.current.volume = 0.2; 
 
     // Inicializar Web Audio API
     try {
@@ -66,7 +66,7 @@ export function ShrinkingBarGame() {
       const audioCtx = new AudioContextClass();
       
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512; // MÁS RESOLUCIÓN PARA EL FRACTAL
+      analyser.fftSize = 256; // Tamaño de buffer para el análisis
 
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
@@ -200,97 +200,93 @@ export function ShrinkingBarGame() {
 
     const bufferLength = dataArray.length;
     
-    // Calcular promedios para controlar la locura
-    let sum = 0;
-    let bassSum = 0;
-    for(let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-        if(i < 10) bassSum += dataArray[i]; // Bajos profundos
+    // Análisis de bajos para el ZOOM
+    let bass = 0;
+    // Tomamos las primeras frecuencias para el bajo
+    for(let i = 0; i < 10; i++) {
+        bass += dataArray[i];
     }
-    const average = sum / bufferLength;
-    const bass = bassSum / 10; // Intensidad del bajo (0-255)
+    bass = bass / 10 / 255; // Normalizado 0.0 - 1.0
 
-    // 1. TRAIL EFFECT (Estela): No borramos todo, dejamos un rastro
-    ctx.fillStyle = "rgba(0, 0, 0, 0.25)"; 
+    const time = performance.now() / 1000;
+
+    // 1. TRAIL EFFECT (Estela):
+    // En lugar de borrar con negro sólido, dibujamos un rectángulo semitransparente.
+    // Esto hace que lo dibujado en el frame anterior se desvanezca lentamente.
+    ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; // Entre más bajo el alpha, más larga la estela
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
     
-    // Centrar en pantalla
+    // Mover el origen al centro para rotar y escalar desde ahí
     ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
 
-    // 2. ZOOM PULSANTE AGRESIVO (KICK)
-    const pulseScale = 1 + (bass / 255) * 0.6; // Hasta 1.6x de zoom
-    ctx.scale(pulseScale, pulseScale);
+    // 2. ZOOM PULSANTE (KICK)
+    // El fondo late con el bajo. 1.0 es normal, hasta 1.8x de zoom.
+    const scale = 1 + bass * 0.8; 
+    ctx.scale(scale, scale);
 
-    // 3. ROTACIÓN CONSTANTE + REACTIVA
-    const time = performance.now() / 1000;
-    // Gira suave siempre, pero acelera con el volumen general
-    const rotation = time * 0.4 + (average / 255) * Math.PI; 
-    ctx.rotate(rotation);
+    // 3. ROTACIÓN CAÓTICA
+    // Gira constantemente + un empujón extra cuando hay bajo
+    ctx.rotate(time * 0.2 + bass * Math.PI);
 
-    // 4. DIBUJAR EL FRACTAL / ESTRELLA
-    const numArms = 32; // Número de brazos del mandala
-    const step = Math.floor(bufferLength / numArms);
+    // 4. FRACTAL / MANDALA
+    const bars = 40; // Cuántos rayos dibujamos
+    const symmetry = 6; // Cuántas veces se repite el patrón circularmente
+    const step = Math.floor(bufferLength / bars);
 
-    for (let i = 0; i < numArms; i++) {
-        const value = dataArray[i * step] || 0;
-        const percent = value / 255;
+    for (let i = 0; i < bars; i++) {
+        const value = dataArray[i * step] / 255.0; // 0.0 a 1.0
         
-        // Color HSL psicodélico que cambia con el tiempo y el bajo
-        const hue = (i * 20 + time * 200 + bass) % 360;
+        // Color Arcoíris que cambia con el tiempo y la intensidad
+        const hue = (time * 100 + i * 20 + bass * 200) % 360;
         
-        ctx.save();
-        ctx.rotate((Math.PI * 2 / numArms) * i); // Rotar para cada brazo
+        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+        ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
+        ctx.lineWidth = 2 + value * 5;
 
-        // Dibujar Rayo de Energía
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        
-        // Curva Bezier dinámica que se mueve
-        const cpX = 50 + percent * 100;
-        const cpY = Math.sin(time * 5 + i) * 50; 
-        const endX = 100 + percent * 400; // Largo basado en volumen
+        // Dibujar múltiples brazos simétricos
+        for (let j = 0; j < symmetry; j++) {
+            ctx.save();
+            ctx.rotate((Math.PI * 2 / symmetry) * j);
+            
+            // Distancia del centro
+            const dist = 50 + i * 10; 
+            
+            // Círculos que explotan hacia afuera
+            const size = value * 30;
+            if (size > 2) {
+                ctx.beginPath();
+                ctx.arc(0, dist + value * 100, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
 
-        ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
-        ctx.lineWidth = 2 + percent * 6;
-        ctx.quadraticCurveTo(cpX, cpY, endX, 0);
-        ctx.stroke();
+            // Líneas conectando al centro (efecto telaraña)
+            if (value > 0.4) {
+                ctx.beginPath();
+                ctx.moveTo(0, 50);
+                ctx.lineTo(0, dist + value * 200);
+                ctx.stroke();
+            }
 
-        // Partícula principal en la punta
-        if (percent > 0.1) {
-            ctx.fillStyle = `hsl(${hue + 60}, 100%, 70%)`;
-            ctx.beginPath();
-            ctx.arc(endX, 0, 4 + percent * 12, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Satélite orbitando la punta (más caos)
-            const satX = endX + Math.cos(time * 15) * (20 * percent);
-            const satY = Math.sin(time * 15) * (20 * percent);
-            ctx.fillStyle = "#ffffff";
-            ctx.beginPath();
-            ctx.arc(satX, satY, 2, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.restore();
         }
-        
-        ctx.restore();
     }
-
-    // 5. NÚCLEO BRILLANTE CENTRAL
-    const coreSize = 30 + (bass / 255) * 50;
-    ctx.beginPath();
-    ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
-    ctx.fillStyle = `hsl(${(time * 100) % 360}, 80%, 60%)`;
-    ctx.fill();
     
-    // Resplandor del núcleo
+    // 5. NÚCLEO EXPLOSIVO CENTRAL
+    // Un círculo brillante en el centro que tapa el origen de las líneas
+    const coreSize = 20 + bass * 60;
+    const coreHue = (time * 500) % 360;
+    
+    ctx.fillStyle = `hsl(${coreHue}, 100%, 80%)`;
     ctx.shadowBlur = 50;
     ctx.shadowColor = "white";
+    
     ctx.beginPath();
-    ctx.arc(0, 0, coreSize * 0.8, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff";
+    ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0; // Reset
+    
+    ctx.shadowBlur = 0; // Resetear para no afectar lo siguiente
 
     ctx.restore();
   }, []);
@@ -298,10 +294,10 @@ export function ShrinkingBarGame() {
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       
-      // Dibujar fondo demente primero
+      // DIBUJAR FONDO DEMENTE (Esto reemplaza el clearRect/fillRect negro)
       drawVisualizerBg(ctx);
 
-      // Aplicar Screen Shake (si hay)
+      // Aplicar Screen Shake del juego (cuando mueren)
       ctx.save();
       if (screenShake > 0) {
         const dx = (Math.random() - 0.5) * screenShake;
@@ -362,12 +358,13 @@ export function ShrinkingBarGame() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black">
-      <h1 className="text-4xl font-bold text-white mb-4">The Shrinking Bar</h1>
+      <h1 className="text-4xl font-bold text-white mb-4" style={{textShadow: "0 0 10px #fff"}}>The Shrinking Bar</h1>
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700 rounded-lg"
+        style={{boxShadow: "0 0 30px rgba(255, 255, 255, 0.1)"}}
       />
       <div className="mt-4 text-gray-400 text-sm text-center">
         {gameState === "lobby" && (
@@ -419,9 +416,12 @@ function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
 }
 
 function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty: Difficulty, scores: ScoreEntry[], speedRampEnabled: boolean) {
-  // Panel semitransparente detrás del lobby para legibilidad
-  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  // Panel semitransparente detrás del lobby para legibilidad (ya que el fondo es una locura)
+  ctx.fillStyle = "rgba(0,0,0,0.85)";
   ctx.fillRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 24px Inter, sans-serif";
@@ -533,8 +533,8 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
         ctx.shadowColor = player.color;
     }
 
-    // Fondo del carril semi-transparente para que se vea el visualizador
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    // Fondo del carril semi-transparente para que el fractal no moleste tanto
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(BAR_PADDING_X, laneY, barWidth, BAR_HEIGHT);
 
     ctx.strokeStyle = "#333333";
@@ -611,6 +611,10 @@ function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores:
   // Fondo oscuro para pantalla final
   ctx.fillStyle = "rgba(0,0,0,0.8)";
   ctx.fillRect(50, 50, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 100);
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(50, 50, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 100);
+
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 36px Inter, sans-serif";
