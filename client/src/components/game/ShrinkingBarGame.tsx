@@ -8,7 +8,7 @@ const BAR_PADDING_X = 50;
 const CURSOR_RADIUS = 12;
 
 // CONFIGURACIÓN MATRIX VAPORWAVE
-const FONT_SIZE = 10; 
+const FONT_SIZE = 20; 
 const MATRIX_SPEED = 0.3; 
 const NUM_ENTITIES = 50; 
 
@@ -582,7 +582,7 @@ function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
 }
 
 function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty: Difficulty, scores: ScoreEntry[], speedRampEnabled: boolean) {
-  ctx.fillStyle = "rgba(0,0,0,0.85)";
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.fillRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
   
   ctx.shadowBlur = 10;
@@ -801,7 +801,7 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
 }
 
 function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores: ScoreEntry[]) {
-  ctx.fillStyle = "rgba(0,0,0,0.85)";
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.fillRect(50, 50, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 100);
   ctx.strokeStyle = VAPORWAVE_COLORS[3];
   ctx.lineWidth = 2;
