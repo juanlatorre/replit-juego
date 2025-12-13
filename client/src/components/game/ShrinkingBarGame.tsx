@@ -26,6 +26,13 @@ export function ShrinkingBarGame() {
     scores,
     speedRampEnabled,
     countdown,
+    
+    // === JUICY VARS ===
+    screenShake,
+    hitStop,
+    updateJuice,
+    // =================
+
     joinPlayer,
     startGame,
     startPracticeGame,
@@ -41,13 +48,10 @@ export function ShrinkingBarGame() {
     setCallbacks,
   } = useShrinkingBar();
 
-  // === CONFIGURACIÓN DE MÚSICA DE FONDO ===
   useEffect(() => {
     musicRef.current = new Audio('/sounds/cat.mp3');
     musicRef.current.loop = true;
-    
-    // BAJAMOS EL VOLUMEN DE LA MÚSICA PARA QUE NO MOLESTE A LOS EFECTOS
-    musicRef.current.volume = 0.2; // Antes 0.4
+    musicRef.current.volume = 0.2;
 
     const playMusic = async () => {
       try {
@@ -65,18 +69,15 @@ export function ShrinkingBarGame() {
     };
   }, []);
 
-  // === CONFIGURACIÓN DE EFECTOS DE SONIDO (SFX) ===
   useEffect(() => {
     hitSoundRef.current = new Audio("/sounds/hit.mp3");
-    hitSoundRef.current.volume = 0.3; // Volumen base para la muerte
-    
+    hitSoundRef.current.volume = 0.3;
     successSoundRef.current = new Audio("/sounds/success.mp3");
     successSoundRef.current.volume = 0.5;
 
     setCallbacks({
       onPlayerEliminated: () => {
         if (hitSoundRef.current) {
-          // Sonido grave y normal para la eliminación
           hitSoundRef.current.currentTime = 0;
           hitSoundRef.current.playbackRate = 1.0; 
           hitSoundRef.current.volume = 0.4;
@@ -84,17 +85,12 @@ export function ShrinkingBarGame() {
         }
       },
       onPlayerBounce: () => {
-        // === SONIDO DE REBOTE (INPUT) ===
         if (hitSoundRef.current) {
           const bounce = hitSoundRef.current.cloneNode() as HTMLAudioElement;
-          
-          // VOLUMEN ALTO PARA QUE DESTAQUE SOBRE LA MÚSICA (0.7 vs 0.2)
           bounce.volume = 0.7; 
-          
-          bounce.playbackRate = 3.0; // Tono agudo ("chip")
+          bounce.playbackRate = 3.0;
           // @ts-ignore
           if (bounce.preservesPitch !== undefined) bounce.preservesPitch = false;
-          
           bounce.play().catch(() => {});
         }
       },
@@ -152,6 +148,15 @@ export function ShrinkingBarGame() {
       ctx.fillStyle = "#0a0a0a";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+      // === APLICAR SCREEN SHAKE (TEMBLOR) ===
+      ctx.save();
+      if (screenShake > 0) {
+        const dx = (Math.random() - 0.5) * screenShake;
+        const dy = (Math.random() - 0.5) * screenShake;
+        ctx.translate(dx, dy);
+      }
+      // =====================================
+
       if (gameState === "lobby") {
         drawLobby(ctx, players, difficulty, scores, speedRampEnabled);
       } else if (gameState === "playing") {
@@ -162,8 +167,11 @@ export function ShrinkingBarGame() {
       } else if (gameState === "ended") {
         drawEnded(ctx, winner, scores);
       }
+
+      // Restaurar el contexto (quitar el shake para el siguiente frame)
+      ctx.restore();
     },
-    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled, countdown]
+    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled, countdown, screenShake]
   );
 
   const gameLoop = useCallback(
@@ -177,9 +185,17 @@ export function ShrinkingBarGame() {
       const delta = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 1000 : 0;
       lastTimeRef.current = timestamp;
 
+      // === ACTUALIZAR JUICE (Decaer shake y hitstop) ===
+      updateJuice(delta);
+      // ===============================================
+
       if (gameState === "playing") {
-        updatePlayers(delta);
-        updateParticles(delta);
+        // === HIT STOP: SOLO ACTUALIZAR SI NO ESTAMOS EN PAUSA ===
+        if (hitStop <= 0) {
+          updatePlayers(delta);
+          updateParticles(delta);
+        }
+        // ======================================================
       } else if (gameState === "countdown") {
         updateCountdown(delta);
       }
@@ -188,7 +204,7 @@ export function ShrinkingBarGame() {
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     },
-    [gameState, updatePlayers, updateParticles, updateCountdown, drawGame]
+    [gameState, updatePlayers, updateParticles, updateCountdown, drawGame, updateJuice, hitStop]
   );
 
   useEffect(() => {
@@ -360,6 +376,13 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
   players.forEach((player, index) => {
     const laneY = 80 + index * 100;
 
+    // === EFECTO NEÓN EN BARRAS ===
+    if (player.alive) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = player.color;
+    }
+    // ============================
+
     ctx.strokeStyle = "#333333";
     ctx.lineWidth = 2;
     ctx.strokeRect(BAR_PADDING_X, laneY, barWidth, BAR_HEIGHT);
@@ -394,7 +417,12 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
       }
       ctx.fillStyle = "#000000";
       ctx.fill();
+
+      // Apagamos neón para que no afecte a textos si hubiera
+      ctx.shadowBlur = 0;
+
     } else {
+      ctx.shadowBlur = 0; // Aseguramos que esté apagado
       ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
       ctx.fillRect(BAR_PADDING_X, laneY, barWidth, BAR_HEIGHT);
       
@@ -412,11 +440,19 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
   });
 
   particles.forEach((particle) => {
+    // === EFECTO NEÓN EN PARTÍCULAS ===
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = particle.color;
+    // ================================
+
     ctx.globalAlpha = particle.life / particle.maxLife;
     ctx.fillStyle = particle.color;
     ctx.beginPath();
     ctx.arc(particle.x, particle.y, particle.size * (particle.life / particle.maxLife), 0, Math.PI * 2);
     ctx.fill();
+    
+    // Apagamos neón
+    ctx.shadowBlur = 0;
   });
   ctx.globalAlpha = 1;
 }
@@ -428,9 +464,15 @@ function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores:
 
   if (winner) {
     ctx.fillStyle = winner.color;
+    // Neón para el ganador también
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = winner.color;
+    
     const winnerLabel = winner.isAI ? "¡LA IA GANA!" : `¡JUGADOR ${winner.id} GANA!`;
     ctx.fillText(winnerLabel, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
     
+    ctx.shadowBlur = 0;
+
     if (!winner.isAI) {
       ctx.font = "20px Inter, sans-serif";
       ctx.fillStyle = "#aaaaaa";
