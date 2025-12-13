@@ -7,6 +7,16 @@ const BAR_HEIGHT = 30;
 const BAR_PADDING_X = 50;
 const CURSOR_RADIUS = 12;
 
+// CONFIGURACIÓN MATRIX VAPORWAVE
+const FONT_SIZE = 16;
+const VAPORWAVE_COLORS = [
+    "#FF71CE", // Rosa neón
+    "#01CDFE", // Cian neón
+    "#05FFA1", // Verde menta neón
+    "#B967FF", // Morado neón
+    "#FFFB96"  // Amarillo pálido neón
+];
+
 export function ShrinkingBarGame() {
   const musicRef = useRef<HTMLAudioElement | null>(null);
   
@@ -15,6 +25,11 @@ export function ShrinkingBarGame() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   // ==========================
+
+  // === MATRIX RAIN REFS ===
+  // Guardamos la posición Y de cada gota. Inicializamos con muchas columnas fuera de pantalla.
+  const matrixDropsRef = useRef<number[]>(Array(Math.floor(CANVAS_WIDTH / FONT_SIZE)).fill(1));
+  // ========================
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
@@ -185,14 +200,44 @@ export function ShrinkingBarGame() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
+  // === NUEVA FUNCIÓN: DIBUJAR LLUVIA MATRIX VAPORWAVE ===
+  const drawMatrixRain = useCallback((ctx: CanvasRenderingContext2D) => {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.1)"; // Un negro muy transparente para que las letras dejen un rastro corto
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    ctx.font = `${FONT_SIZE}px monospace`;
+    ctx.textAlign = "center";
+    const drops = matrixDropsRef.current;
+
+    for (let i = 0; i < drops.length; i++) {
+        // Carácter Katakana aleatorio
+        const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+        // Color Vaporwave aleatorio
+        const color = VAPORWAVE_COLORS[Math.floor(Math.random() * VAPORWAVE_COLORS.length)];
+        
+        // Dibujar el carácter un poco brillante
+        ctx.fillStyle = color;
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = color;
+        ctx.fillText(char, i * FONT_SIZE, drops[i] * FONT_SIZE);
+        ctx.shadowBlur = 0;
+
+        // Mover la gota hacia abajo. Si sale de la pantalla, resetear al azar arriba
+        if (drops[i] * FONT_SIZE > CANVAS_HEIGHT && Math.random() > 0.975) {
+            drops[i] = 0;
+        }
+        drops[i]++;
+    }
+  }, []);
+  // =====================================================
+
   // === DIBUJAR VISUALIZADOR "DEMENTE" ===
   const drawVisualizerBg = useCallback((ctx: CanvasRenderingContext2D) => {
     const analyser = analyserRef.current;
     const dataArray = dataArrayRef.current;
 
     if (!analyser || !dataArray) {
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        drawMatrixRain(ctx); // Si no hay audio, solo dibuja matrix
         return;
     }
 
@@ -202,18 +247,17 @@ export function ShrinkingBarGame() {
     
     // Análisis de bajos para el ZOOM
     let bass = 0;
-    // Tomamos las primeras frecuencias para el bajo
-    for(let i = 0; i < 10; i++) {
-        bass += dataArray[i];
-    }
+    for(let i = 0; i < 10; i++) { bass += dataArray[i]; }
     bass = bass / 10 / 255; // Normalizado 0.0 - 1.0
 
     const time = performance.now() / 1000;
 
-    // 1. TRAIL EFFECT (Estela):
-    // En lugar de borrar con negro sólido, dibujamos un rectángulo semitransparente.
-    // Esto hace que lo dibujado en el frame anterior se desvanezca lentamente.
-    ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; // Entre más bajo el alpha, más larga la estela
+    // 1. DIBUJAR FONDO MATRIX PRIMERO (La capa más profunda)
+    drawMatrixRain(ctx);
+
+    // 2. CAPA DE "ESTELA" PRINCIPAL (Trail Effect)
+    // Esto oscurece un poco la matrix y crea el rastro para el fractal de encima
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)"; 
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
@@ -221,36 +265,39 @@ export function ShrinkingBarGame() {
     // Mover el origen al centro para rotar y escalar desde ahí
     ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
 
-    // 2. ZOOM PULSANTE (KICK)
-    // El fondo late con el bajo. 1.0 es normal, hasta 1.8x de zoom.
+    // 3. ZOOM PULSANTE (KICK)
     const scale = 1 + bass * 0.8; 
     ctx.scale(scale, scale);
 
-    // 3. ROTACIÓN CAÓTICA
-    // Gira constantemente + un empujón extra cuando hay bajo
+    // 4. ROTACIÓN CAÓTICA
     ctx.rotate(time * 0.2 + bass * Math.PI);
 
-    // 4. FRACTAL / MANDALA
-    const bars = 40; // Cuántos rayos dibujamos
-    const symmetry = 6; // Cuántas veces se repite el patrón circularmente
+    // 5. FRACTAL VAPORWAVE
+    const bars = 40; 
+    const symmetry = 6; 
     const step = Math.floor(bufferLength / bars);
 
     for (let i = 0; i < bars; i++) {
         const value = dataArray[i * step] / 255.0; // 0.0 a 1.0
         
-        // Color Arcoíris que cambia con el tiempo y la intensidad
-        const hue = (time * 100 + i * 20 + bass * 200) % 360;
+        // Usar índice para seleccionar color vaporwave cíclicamente
+        const colorIndex = (i + Math.floor(time * 5)) % VAPORWAVE_COLORS.length;
+        const color = VAPORWAVE_COLORS[colorIndex];
         
-        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
-        ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 2 + value * 5;
+        
+        // Un poco de glow para el fractal
+        if (value > 0.5) {
+             ctx.shadowBlur = 15;
+             ctx.shadowColor = color;
+        }
 
-        // Dibujar múltiples brazos simétricos
         for (let j = 0; j < symmetry; j++) {
             ctx.save();
             ctx.rotate((Math.PI * 2 / symmetry) * j);
             
-            // Distancia del centro
             const dist = 50 + i * 10; 
             
             // Círculos que explotan hacia afuera
@@ -261,40 +308,39 @@ export function ShrinkingBarGame() {
                 ctx.fill();
             }
 
-            // Líneas conectando al centro (efecto telaraña)
+            // Líneas conectando al centro
             if (value > 0.4) {
                 ctx.beginPath();
                 ctx.moveTo(0, 50);
                 ctx.lineTo(0, dist + value * 200);
                 ctx.stroke();
             }
-
             ctx.restore();
         }
+        ctx.shadowBlur = 0; // Reset glow
     }
     
-    // 5. NÚCLEO EXPLOSIVO CENTRAL
-    // Un círculo brillante en el centro que tapa el origen de las líneas
+    // 6. NÚCLEO EXPLOSIVO CENTRAL
     const coreSize = 20 + bass * 60;
-    const coreHue = (time * 500) % 360;
+    const coreColor = VAPORWAVE_COLORS[Math.floor(time * 2) % VAPORWAVE_COLORS.length];
     
-    ctx.fillStyle = `hsl(${coreHue}, 100%, 80%)`;
+    ctx.fillStyle = coreColor;
     ctx.shadowBlur = 50;
-    ctx.shadowColor = "white";
+    ctx.shadowColor = coreColor;
     
     ctx.beginPath();
     ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
     ctx.fill();
     
-    ctx.shadowBlur = 0; // Resetear para no afectar lo siguiente
+    ctx.shadowBlur = 0;
 
     ctx.restore();
-  }, []);
+  }, [drawMatrixRain]); // drawMatrixRain es dependencia ahora
 
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       
-      // DIBUJAR FONDO DEMENTE (Esto reemplaza el clearRect/fillRect negro)
+      // DIBUJAR FONDO DEMENTE (Matrix + Fractal)
       drawVisualizerBg(ctx);
 
       // Aplicar Screen Shake del juego (cuando mueren)
@@ -358,29 +404,29 @@ export function ShrinkingBarGame() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black">
-      <h1 className="text-4xl font-bold text-white mb-4" style={{textShadow: "0 0 10px #fff"}}>The Shrinking Bar</h1>
+      <h1 className="text-4xl font-bold text-white mb-4" style={{textShadow: "0 0 10px #FF71CE, 0 0 20px #01CDFE"}}>The Shrinking Bar</h1>
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700 rounded-lg"
-        style={{boxShadow: "0 0 30px rgba(255, 255, 255, 0.1)"}}
+        style={{boxShadow: "0 0 30px rgba(255, 113, 206, 0.3), 0 0 10px rgba(1, 205, 254, 0.3)"}}
       />
-      <div className="mt-4 text-gray-400 text-sm text-center">
+      <div className="mt-4 text-gray-400 text-sm text-center font-mono">
         {gameState === "lobby" && (
           <>
-            <p>Presiona cualquier tecla para unirte | SPACE para iniciar (min 2 jugadores)</p>
-            <p className="mt-1">M: Modo práctica | 1-3: Dificultad | S: Velocidad Progresiva</p>
+            <p>PRESS ANY KEY TO JOIN | SPACE TO START (MIN 2 PLAYERS)</p>
+            <p className="mt-1 text-xs text-pink-400">M: PRACTICE MODE | 1-3: DIFFICULTY | S: PROGRESSIVE SPEED</p>
           </>
         )}
         {gameState === "countdown" && (
-          <p className="text-yellow-400 font-bold">¡PREPÁRATE!</p>
+          <p className="text-yellow-400 font-bold text-xl animate-pulse">GET READY!</p>
         )}
         {gameState === "playing" && (
-          <p>Presiona tu tecla asignada para rebotar y recortar tu barra</p>
+          <p className="text-cyan-400">PRESS YOUR ASSIGNED KEY TO BOUNCE AND SHRINK</p>
         )}
         {gameState === "ended" && (
-          <p>R: Revancha (Mismos jugadores) | L: Lobby/Menu | C: Borrar Puntuaciones</p>
+          <p className="text-purple-400">R: REMATCH | L: LOBBY/MENU | C: CLEAR SCORES</p>
         )}
       </div>
     </div>
@@ -388,7 +434,6 @@ export function ShrinkingBarGame() {
 }
 
 function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
-  // Fondo semitransparente para resaltar número
   ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -396,19 +441,15 @@ function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
   
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "bold 150px Inter, sans-serif";
-  ctx.shadowColor = "black";
-  ctx.shadowBlur = 20;
+  ctx.font = "bold 150px monospace";
+  ctx.shadowColor = VAPORWAVE_COLORS[value % VAPORWAVE_COLORS.length];
+  ctx.shadowBlur = 40;
 
   if (value > 0) {
-    if (value === 3) ctx.fillStyle = "#FF6B6B";
-    else if (value === 2) ctx.fillStyle = "#FFE66D";
-    else ctx.fillStyle = "#4ECDC4";
-    
+    ctx.fillStyle = VAPORWAVE_COLORS[value % VAPORWAVE_COLORS.length];
     ctx.fillText(value.toString(), CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
   } else {
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 120px Inter, sans-serif";
     ctx.fillText("GO!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
   }
 
@@ -416,71 +457,85 @@ function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
 }
 
 function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty: Difficulty, scores: ScoreEntry[], speedRampEnabled: boolean) {
-  // Panel semitransparente detrás del lobby para legibilidad (ya que el fondo es una locura)
+  // Panel semitransparente MÁS OSCURO
   ctx.fillStyle = "rgba(0,0,0,0.85)";
   ctx.fillRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
-  ctx.strokeStyle = "white";
+  
+  // Borde neón para el panel
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = VAPORWAVE_COLORS[0];
+  ctx.strokeStyle = VAPORWAVE_COLORS[1];
   ctx.lineWidth = 2;
   ctx.strokeRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
+  ctx.shadowBlur = 0;
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 24px Inter, sans-serif";
+  ctx.font = "bold 24px monospace";
   ctx.textAlign = "center";
+  ctx.shadowColor = VAPORWAVE_COLORS[3];
+  ctx.shadowBlur = 10;
   ctx.fillText("LOBBY", CANVAS_WIDTH / 2, 60);
+  ctx.shadowBlur = 0;
 
-  ctx.font = "14px Inter, sans-serif";
+  ctx.font = "14px monospace";
   ctx.fillStyle = "#aaaaaa";
-  ctx.fillText("Presiona cualquier tecla para unirte", CANVAS_WIDTH / 2, 85);
+  ctx.fillText("PRESS ANY KEY TO JOIN", CANVAS_WIDTH / 2, 85);
 
   const diffColors: Record<Difficulty, string> = {
-    easy: "#4ECDC4",
-    normal: "#FFE66D",
-    hard: "#FF6B6B",
+    easy: VAPORWAVE_COLORS[2], // Verde
+    normal: VAPORWAVE_COLORS[4], // Amarillo
+    hard: VAPORWAVE_COLORS[0], // Rosa
   };
   const diffLabels: Record<Difficulty, string> = {
-    easy: "Facil (1)",
-    normal: "Normal (2)",
-    hard: "Dificil (3)",
+    easy: "EASY (1)",
+    normal: "NORMAL (2)",
+    hard: "HARD (3)",
   };
 
-  ctx.font = "16px Inter, sans-serif";
+  ctx.font = "16px monospace";
   ctx.fillStyle = "#888888";
-  ctx.fillText("Dificultad:", CANVAS_WIDTH / 2, 115);
+  ctx.fillText("DIFFICULTY:", CANVAS_WIDTH / 2, 115);
 
   const startX = CANVAS_WIDTH / 2 - 150;
   (["easy", "normal", "hard"] as Difficulty[]).forEach((d, i) => {
     const x = startX + i * 100;
     ctx.fillStyle = d === difficulty ? diffColors[d] : "#444444";
+    if (d === difficulty) { ctx.shadowBlur = 10; ctx.shadowColor = diffColors[d]; }
     ctx.fillRect(x, 125, 90, 25);
+    ctx.shadowBlur = 0;
     ctx.fillStyle = d === difficulty ? "#000000" : "#888888";
-    ctx.font = "12px Inter, sans-serif";
+    ctx.font = "bold 12px monospace";
     ctx.textAlign = "center";
     ctx.fillText(diffLabels[d], x + 45, 142);
   });
 
   const rampY = 165;
-  ctx.font = "14px Inter, sans-serif";
+  ctx.font = "14px monospace";
   ctx.textAlign = "center";
   if (speedRampEnabled) {
-    ctx.fillStyle = "#FF5555";
-    ctx.fillText(">> VELOCIDAD PROGRESIVA: ON (S) <<", CANVAS_WIDTH / 2, rampY);
+    ctx.fillStyle = VAPORWAVE_COLORS[0];
+    ctx.shadowBlur = 5; ctx.shadowColor = VAPORWAVE_COLORS[0];
+    ctx.fillText(">> PROGRESSIVE SPEED: ON (S) <<", CANVAS_WIDTH / 2, rampY);
+    ctx.shadowBlur = 0;
   } else {
     ctx.fillStyle = "#444444";
-    ctx.fillText("Velocidad Progresiva: OFF (S)", CANVAS_WIDTH / 2, rampY);
+    ctx.fillText("Progressive Speed: OFF (S)", CANVAS_WIDTH / 2, rampY);
   }
 
   if (players.length > 0) {
-    ctx.font = "16px Inter, sans-serif";
+    ctx.font = "16px monospace";
     players.forEach((player, index) => {
       const y = 190 + index * 45;
       
       ctx.fillStyle = player.color;
+      ctx.shadowBlur = 5; ctx.shadowColor = player.color;
       ctx.fillRect(CANVAS_WIDTH / 2 - 140, y - 12, 280, 35);
+      ctx.shadowBlur = 0;
       
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
       ctx.fillText(
-        `Jugador ${player.id} - Tecla: "${player.key.toUpperCase()}"`,
+        `P${player.id} - KEY: "${player.key.toUpperCase()}"`,
         CANVAS_WIDTH / 2,
         y + 8
       );
@@ -488,37 +543,39 @@ function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty:
   }
 
   if (scores.length > 0) {
-    ctx.fillStyle = "#FFE66D";
-    ctx.font = "bold 14px Inter, sans-serif";
+    ctx.fillStyle = VAPORWAVE_COLORS[4];
+    ctx.font = "bold 14px monospace";
     ctx.textAlign = "left";
-    ctx.fillText("Puntuaciones:", 70, 400);
+    ctx.fillText("SCORES:", 70, 400);
     
     const sortedScores = [...scores].sort((a, b) => b.wins - a.wins);
     sortedScores.slice(0, 4).forEach((score, i) => {
       ctx.fillStyle = score.color;
-      ctx.fillText(`[${score.key.toUpperCase()}]: ${score.wins} victoria${score.wins !== 1 ? 's' : ''}`, 70, 420 + i * 18);
+      ctx.fillText(`[${score.key.toUpperCase()}]: ${score.wins} WINS`, 70, 420 + i * 18);
     });
   }
 
   if (players.length >= 2) {
-    ctx.fillStyle = "#4ECDC4";
-    ctx.font = "bold 18px Inter, sans-serif";
+    ctx.fillStyle = VAPORWAVE_COLORS[1];
+    ctx.font = "bold 18px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("SPACE para iniciar", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60);
+    ctx.shadowBlur = 10; ctx.shadowColor = VAPORWAVE_COLORS[1];
+    ctx.fillText("SPACE TO START", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60);
+    ctx.shadowBlur = 0;
   }
   
   if (players.length >= 1) {
-    ctx.fillStyle = "#AA96DA";
-    ctx.font = "14px Inter, sans-serif";
+    ctx.fillStyle = VAPORWAVE_COLORS[3];
+    ctx.font = "14px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("M para modo practica (vs IA)", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 35);
+    ctx.fillText("M FOR PRACTICE MODE (VS AI)", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 35);
   }
   
   if (players.length === 0) {
     ctx.fillStyle = "#666666";
-    ctx.font = "16px Inter, sans-serif";
+    ctx.font = "16px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("Esperando jugadores...", CANVAS_WIDTH / 2, 240);
+    ctx.fillText("WAITING FOR PLAYERS...", CANVAS_WIDTH / 2, 240);
   }
 }
 
@@ -529,12 +586,12 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
     const laneY = 80 + index * 100;
 
     if (player.alive) {
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 20;
         ctx.shadowColor = player.color;
     }
 
-    // Fondo del carril semi-transparente para que el fractal no moleste tanto
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    // Fondo del carril más oscuro para contraste con matrix
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(BAR_PADDING_X, laneY, barWidth, BAR_HEIGHT);
 
     ctx.strokeStyle = "#333333";
@@ -580,20 +637,22 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
       ctx.fillRect(BAR_PADDING_X, laneY, barWidth, BAR_HEIGHT);
       
       ctx.fillStyle = "#ff0000";
-      ctx.font = "bold 16px Inter, sans-serif";
+      ctx.font = "bold 16px monospace";
       ctx.textAlign = "center";
-      ctx.fillText("ELIMINADO", CANVAS_WIDTH / 2, laneY + BAR_HEIGHT / 2 + 5);
+      ctx.fillText("ELIMINATED", CANVAS_WIDTH / 2, laneY + BAR_HEIGHT / 2 + 5);
     }
 
     ctx.fillStyle = player.color;
-    ctx.font = "14px Inter, sans-serif";
+    ctx.font = "14px monospace";
     ctx.textAlign = "left";
-    const label = player.isAI ? `IA` : `J${player.id} [${player.key.toUpperCase()}]`;
+    const label = player.isAI ? `IA` : `P${player.id} [${player.key.toUpperCase()}]`;
+    ctx.shadowBlur = 5; ctx.shadowColor = player.color;
     ctx.fillText(label, BAR_PADDING_X, laneY - 8);
+    ctx.shadowBlur = 0;
   });
 
   particles.forEach((particle) => {
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 15;
     ctx.shadowColor = particle.color;
 
     ctx.globalAlpha = particle.life / particle.maxLife;
@@ -609,51 +668,57 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
 
 function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores: ScoreEntry[]) {
   // Fondo oscuro para pantalla final
-  ctx.fillStyle = "rgba(0,0,0,0.8)";
+  ctx.fillStyle = "rgba(0,0,0,0.85)";
   ctx.fillRect(50, 50, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 100);
-  ctx.strokeStyle = "white";
+  ctx.strokeStyle = VAPORWAVE_COLORS[3];
   ctx.lineWidth = 2;
+  ctx.shadowBlur = 10; ctx.shadowColor = VAPORWAVE_COLORS[3];
   ctx.strokeRect(50, 50, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 100);
+  ctx.shadowBlur = 0;
 
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 36px Inter, sans-serif";
+  ctx.font = "bold 36px monospace";
   ctx.textAlign = "center";
 
   if (winner) {
     ctx.fillStyle = winner.color;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 25;
     ctx.shadowColor = winner.color;
     
-    const winnerLabel = winner.isAI ? "¡LA IA GANA!" : `¡JUGADOR ${winner.id} GANA!`;
+    const winnerLabel = winner.isAI ? "AI WINS!" : `PLAYER ${winner.id} WINS!`;
     ctx.fillText(winnerLabel, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
     
     ctx.shadowBlur = 0;
 
     if (!winner.isAI) {
-      ctx.font = "20px Inter, sans-serif";
+      ctx.font = "20px monospace";
       ctx.fillStyle = "#aaaaaa";
-      ctx.fillText(`Tecla: "${winner.key.toUpperCase()}"`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      ctx.fillText(`KEY: "${winner.key.toUpperCase()}"`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
     }
   } else {
-    ctx.fillStyle = "#ff6b6b";
-    ctx.fillText("¡EMPATE!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+    ctx.fillStyle = VAPORWAVE_COLORS[0];
+    ctx.shadowBlur = 20; ctx.shadowColor = VAPORWAVE_COLORS[0];
+    ctx.fillText("DRAW!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+    ctx.shadowBlur = 0;
   }
 
   if (scores.length > 0) {
-    ctx.font = "bold 16px Inter, sans-serif";
-    ctx.fillStyle = "#FFE66D";
-    ctx.fillText("Tabla de Puntuaciones", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
+    ctx.font = "bold 16px monospace";
+    ctx.fillStyle = VAPORWAVE_COLORS[4];
+    ctx.fillText("SCOREBOARD", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
     
     const sortedScores = [...scores].sort((a, b) => b.wins - a.wins);
-    ctx.font = "14px Inter, sans-serif";
+    ctx.font = "14px monospace";
     sortedScores.slice(0, 4).forEach((score, i) => {
       ctx.fillStyle = score.color;
-      ctx.fillText(`[${score.key.toUpperCase()}]: ${score.wins} victoria${score.wins !== 1 ? 's' : ''}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 75 + i * 20);
+      ctx.fillText(`[${score.key.toUpperCase()}]: ${score.wins} WINS`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 75 + i * 20);
     });
   }
 
-  ctx.fillStyle = "#4ECDC4";
-  ctx.font = "18px Inter, sans-serif";
-  ctx.fillText("R: Revancha (Mismos jugadores) | L: Lobby/Menu | C: Borrar Puntuaciones", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 40);
+  ctx.fillStyle = VAPORWAVE_COLORS[1];
+  ctx.font = "18px monospace";
+  ctx.shadowBlur = 10; ctx.shadowColor = VAPORWAVE_COLORS[1];
+  ctx.fillText("R: REMATCH | L: LOBBY | C: CLEAR SCORES", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 65);
+  ctx.shadowBlur = 0;
 }
