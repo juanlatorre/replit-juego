@@ -8,7 +8,7 @@ const BAR_PADDING_X = 50;
 const CURSOR_RADIUS = 12;
 
 // CONFIGURACIÓN MATRIX VAPORWAVE
-const FONT_SIZE = 16;
+const FONT_SIZE = 10; // Reducido para MÁS letras
 const VAPORWAVE_COLORS = [
     "#FF71CE", // Rosa neón
     "#01CDFE", // Cian neón
@@ -16,6 +16,16 @@ const VAPORWAVE_COLORS = [
     "#B967FF", // Morado neón
     "#FFFB96"  // Amarillo pálido neón
 ];
+
+// Definición para los fractales flotantes
+interface FractalEntity {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    sizeScale: number;
+    phase: number; // Para rotación individual
+}
 
 export function ShrinkingBarGame() {
   const musicRef = useRef<HTMLAudioElement | null>(null);
@@ -27,9 +37,13 @@ export function ShrinkingBarGame() {
   // ==========================
 
   // === MATRIX RAIN REFS ===
-  // Guardamos la posición Y de cada gota. Inicializamos con muchas columnas fuera de pantalla.
   const matrixDropsRef = useRef<number[]>(Array(Math.floor(CANVAS_WIDTH / FONT_SIZE)).fill(1));
   // ========================
+
+  // === FRACTAL SWARM REFS (NUEVO) ===
+  // Inicializamos vacio, lo llenamos en el useEffect
+  const fractalsRef = useRef<FractalEntity[]>([]);
+  // ==================================
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
@@ -60,7 +74,7 @@ export function ShrinkingBarGame() {
     updatePlayers,
     updateParticles,
     updateCountdown,
-    handlePlayerInput,
+    handlePlayerInput: storeHandlePlayerInput, // Renombramos para envolverlo
     resetGame,
     rematch,
     resetScores,
@@ -69,19 +83,35 @@ export function ShrinkingBarGame() {
     setCallbacks,
   } = useShrinkingBar();
 
-  // === AUDIO SETUP (MÚSICA + ANALIZADOR) ===
+  // === INICIALIZAR FRACTALES FLOTANTES ===
+  useEffect(() => {
+      // Crear 6 fractales aleatorios
+      const entities: FractalEntity[] = [];
+      for(let i=0; i<6; i++) {
+          entities.push({
+              x: Math.random() * CANVAS_WIDTH,
+              y: Math.random() * CANVAS_HEIGHT,
+              vx: (Math.random() - 0.5) * 100, // Velocidad inicial
+              vy: (Math.random() - 0.5) * 100,
+              sizeScale: 0.5 + Math.random() * 0.5, // Tamaños variados
+              phase: Math.random() * Math.PI * 2
+          });
+      }
+      fractalsRef.current = entities;
+  }, []);
+
+  // === AUDIO SETUP ===
   useEffect(() => {
     musicRef.current = new Audio('/sounds/cat.mp3');
     musicRef.current.loop = true;
     musicRef.current.volume = 0.2; 
 
-    // Inicializar Web Audio API
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioContextClass();
       
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256; // Tamaño de buffer para el análisis
+      analyser.fftSize = 256; 
 
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
@@ -95,7 +125,7 @@ export function ShrinkingBarGame() {
       dataArrayRef.current = dataArray;
 
     } catch (e) {
-      console.warn("Error iniciando Web Audio API:", e);
+      console.warn("Error Web Audio API:", e);
     }
 
     const playMusic = async () => {
@@ -152,11 +182,24 @@ export function ShrinkingBarGame() {
     });
   }, [setCallbacks]);
 
+  // === NUEVO WRAPPER PARA INPUT: CAOS FRACTAL ===
+  const handlePlayerInput = useCallback((key: string) => {
+      // 1. Llamar a la lógica original del juego
+      storeHandlePlayerInput(key);
+
+      // 2. CAOS: Cambiar dirección de todos los fractales aleatoriamente
+      fractalsRef.current.forEach(f => {
+          // Asignar nueva velocidad aleatoria (más rápida para que se sienta el impacto)
+          f.vx = (Math.random() - 0.5) * 300; 
+          f.vy = (Math.random() - 0.5) * 300;
+      });
+
+  }, [storeHandlePlayerInput]);
+
   const handleKeyDown = useCallback(
     async (e: KeyboardEvent) => {
       const key = e.key;
       
-      // Intentar reanudar audio en interacción
       if (audioContextRef.current?.state === 'suspended') {
          try { await audioContextRef.current.resume(); } catch(e) {}
       }
@@ -200,150 +243,149 @@ export function ShrinkingBarGame() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // === NUEVA FUNCIÓN: DIBUJAR LLUVIA MATRIX VAPORWAVE ===
+  // === DIBUJAR LLUVIA MATRIX (MÁS DENSA) ===
   const drawMatrixRain = useCallback((ctx: CanvasRenderingContext2D) => {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.1)"; // Un negro muy transparente para que las letras dejen un rastro corto
+    // Rastro más corto (más oscuro) para que se vean más claras las letras nuevas
+    ctx.fillStyle = "rgba(0, 0, 0, 0.08)"; 
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.font = `${FONT_SIZE}px monospace`;
     ctx.textAlign = "center";
     const drops = matrixDropsRef.current;
 
+    // Asegurarnos que drops tenga el tamaño correcto si cambió CANVAS_WIDTH (resiliencia)
+    if (drops.length < Math.floor(CANVAS_WIDTH / FONT_SIZE)) {
+        const diff = Math.floor(CANVAS_WIDTH / FONT_SIZE) - drops.length;
+        for(let k=0; k<diff; k++) drops.push(Math.random() * 100);
+    }
+
     for (let i = 0; i < drops.length; i++) {
-        // Carácter Katakana aleatorio
         const char = String.fromCharCode(0x30A0 + Math.random() * 96);
-        // Color Vaporwave aleatorio
         const color = VAPORWAVE_COLORS[Math.floor(Math.random() * VAPORWAVE_COLORS.length)];
         
-        // Dibujar el carácter un poco brillante
         ctx.fillStyle = color;
-        ctx.shadowBlur = 5;
-        ctx.shadowColor = color;
+        // Quitamos shadowBlur aquí por rendimiento, ya que son MUCHAS letras
         ctx.fillText(char, i * FONT_SIZE, drops[i] * FONT_SIZE);
-        ctx.shadowBlur = 0;
 
-        // Mover la gota hacia abajo. Si sale de la pantalla, resetear al azar arriba
-        if (drops[i] * FONT_SIZE > CANVAS_HEIGHT && Math.random() > 0.975) {
+        if (drops[i] * FONT_SIZE > CANVAS_HEIGHT && Math.random() > 0.98) {
             drops[i] = 0;
         }
         drops[i]++;
     }
   }, []);
-  // =====================================================
 
-  // === DIBUJAR VISUALIZADOR "DEMENTE" ===
-  const drawVisualizerBg = useCallback((ctx: CanvasRenderingContext2D) => {
+  // === DIBUJAR VISUALIZADOR MULTI-FRACTAL ===
+  const drawVisualizerBg = useCallback((ctx: CanvasRenderingContext2D, delta: number) => {
     const analyser = analyserRef.current;
     const dataArray = dataArrayRef.current;
 
     if (!analyser || !dataArray) {
-        drawMatrixRain(ctx); // Si no hay audio, solo dibuja matrix
+        drawMatrixRain(ctx);
         return;
     }
 
     analyser.getByteFrequencyData(dataArray);
-
     const bufferLength = dataArray.length;
     
-    // Análisis de bajos para el ZOOM
+    // Bajos
     let bass = 0;
-    for(let i = 0; i < 10; i++) { bass += dataArray[i]; }
-    bass = bass / 10 / 255; // Normalizado 0.0 - 1.0
+    for(let i = 0; i < 10; i++) bass += dataArray[i];
+    bass = bass / 10 / 255;
 
     const time = performance.now() / 1000;
 
-    // 1. DIBUJAR FONDO MATRIX PRIMERO (La capa más profunda)
+    // 1. DIBUJAR MATRIX DE FONDO
     drawMatrixRain(ctx);
 
-    // 2. CAPA DE "ESTELA" PRINCIPAL (Trail Effect)
-    // Esto oscurece un poco la matrix y crea el rastro para el fractal de encima
-    ctx.fillStyle = "rgba(0, 0, 0, 0.3)"; 
+    // 2. CAPA DE UNIFICACIÓN (para que los fractales brillen sobre lo oscuro)
+    ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; 
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    ctx.save();
+    // 3. ACTUALIZAR Y DIBUJAR CADA FRACTAL
+    const fractals = fractalsRef.current;
     
-    // Mover el origen al centro para rotar y escalar desde ahí
-    ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-
-    // 3. ZOOM PULSANTE (KICK)
-    const scale = 1 + bass * 0.8; 
-    ctx.scale(scale, scale);
-
-    // 4. ROTACIÓN CAÓTICA
-    ctx.rotate(time * 0.2 + bass * Math.PI);
-
-    // 5. FRACTAL VAPORWAVE
-    const bars = 40; 
-    const symmetry = 6; 
+    // Parámetros visuales compartidos
+    const bars = 20; // Menos barras por fractal para mantener rendimiento
+    const symmetry = 5; 
     const step = Math.floor(bufferLength / bars);
 
-    for (let i = 0; i < bars; i++) {
-        const value = dataArray[i * step] / 255.0; // 0.0 a 1.0
-        
-        // Usar índice para seleccionar color vaporwave cíclicamente
-        const colorIndex = (i + Math.floor(time * 5)) % VAPORWAVE_COLORS.length;
-        const color = VAPORWAVE_COLORS[colorIndex];
-        
-        ctx.fillStyle = color;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2 + value * 5;
-        
-        // Un poco de glow para el fractal
-        if (value > 0.5) {
-             ctx.shadowBlur = 15;
-             ctx.shadowColor = color;
-        }
+    fractals.forEach((f, fIndex) => {
+        // MOVIMIENTO FÍSICO
+        f.x += f.vx * delta;
+        f.y += f.vy * delta;
 
-        for (let j = 0; j < symmetry; j++) {
-            ctx.save();
-            ctx.rotate((Math.PI * 2 / symmetry) * j);
+        // Rebote en bordes
+        if (f.x < 0 || f.x > CANVAS_WIDTH) f.vx *= -1;
+        if (f.y < 0 || f.y > CANVAS_HEIGHT) f.vy *= -1;
+        
+        // Clamp posiciones para que no se escapen
+        f.x = Math.max(0, Math.min(CANVAS_WIDTH, f.x));
+        f.y = Math.max(0, Math.min(CANVAS_HEIGHT, f.y));
+
+        ctx.save();
+        ctx.translate(f.x, f.y);
+
+        // Zoom y rotación individual
+        // El bass afecta a todos, pero con fases distintas
+        const localScale = f.sizeScale * (1 + bass * 0.5);
+        ctx.scale(localScale, localScale);
+        ctx.rotate(f.phase + time * 0.5 + bass * Math.PI); // Giran
+
+        // DIBUJAR EL MINI-MANDALA
+        for (let i = 0; i < bars; i++) {
+            const value = dataArray[i * step] / 255.0;
             
-            const dist = 50 + i * 10; 
+            // Color varía por fractal y por tiempo
+            const colorIndex = (i + fIndex + Math.floor(time * 8)) % VAPORWAVE_COLORS.length;
+            const color = VAPORWAVE_COLORS[colorIndex];
             
-            // Círculos que explotan hacia afuera
-            const size = value * 30;
-            if (size > 2) {
-                ctx.beginPath();
-                ctx.arc(0, dist + value * 100, size, 0, Math.PI * 2);
-                ctx.fill();
-            }
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2 + value * 3;
 
-            // Líneas conectando al centro
-            if (value > 0.4) {
-                ctx.beginPath();
-                ctx.moveTo(0, 50);
-                ctx.lineTo(0, dist + value * 200);
-                ctx.stroke();
+            for (let j = 0; j < symmetry; j++) {
+                ctx.save();
+                ctx.rotate((Math.PI * 2 / symmetry) * j);
+                
+                const dist = 10 + i * 5; 
+                
+                // Puntos
+                const size = value * 15;
+                if (size > 1) {
+                    ctx.beginPath();
+                    ctx.arc(0, dist + value * 50, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // Conexiones (rayos)
+                if (value > 0.3) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, 10);
+                    ctx.lineTo(0, dist + value * 80);
+                    ctx.stroke();
+                }
+                ctx.restore();
             }
-            ctx.restore();
         }
-        ctx.shadowBlur = 0; // Reset glow
-    }
-    
-    // 6. NÚCLEO EXPLOSIVO CENTRAL
-    const coreSize = 20 + bass * 60;
-    const coreColor = VAPORWAVE_COLORS[Math.floor(time * 2) % VAPORWAVE_COLORS.length];
-    
-    ctx.fillStyle = coreColor;
-    ctx.shadowBlur = 50;
-    ctx.shadowColor = coreColor;
-    
-    ctx.beginPath();
-    ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.shadowBlur = 0;
+        
+        // Núcleo brillante
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(0, 0, 5 + bass * 10, 0, Math.PI * 2);
+        ctx.fill();
 
-    ctx.restore();
-  }, [drawMatrixRain]); // drawMatrixRain es dependencia ahora
+        ctx.restore();
+    });
+
+  }, [drawMatrixRain]);
 
   const drawGame = useCallback(
-    (ctx: CanvasRenderingContext2D) => {
+    (ctx: CanvasRenderingContext2D, delta: number) => {
       
-      // DIBUJAR FONDO DEMENTE (Matrix + Fractal)
-      drawVisualizerBg(ctx);
+      // DIBUJAR FONDO DEMENTE
+      drawVisualizerBg(ctx, delta);
 
-      // Aplicar Screen Shake del juego (cuando mueren)
+      // Screen Shake
       ctx.save();
       if (screenShake > 0) {
         const dx = (Math.random() - 0.5) * screenShake;
@@ -378,7 +420,6 @@ export function ShrinkingBarGame() {
       const delta = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 1000 : 0;
       lastTimeRef.current = timestamp;
 
-      // Update JUICE (Shake y HitStop)
       updateJuice(delta);
 
       if (gameState === "playing") {
@@ -390,7 +431,8 @@ export function ShrinkingBarGame() {
         updateCountdown(delta);
       }
 
-      drawGame(ctx);
+      // Pasamos delta a drawGame para mover los fractales
+      drawGame(ctx, delta);
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     },
@@ -426,7 +468,7 @@ export function ShrinkingBarGame() {
           <p className="text-cyan-400">PRESS YOUR ASSIGNED KEY TO BOUNCE AND SHRINK</p>
         )}
         {gameState === "ended" && (
-          <p className="text-purple-400">R: REMATCH | L: LOBBY/MENU | C: CLEAR SCORES</p>
+          <p className="text-purple-400">R: REMATCH | L: LOBBY | C: CLEAR SCORES</p>
         )}
       </div>
     </div>
@@ -457,11 +499,9 @@ function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
 }
 
 function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty: Difficulty, scores: ScoreEntry[], speedRampEnabled: boolean) {
-  // Panel semitransparente MÁS OSCURO
   ctx.fillStyle = "rgba(0,0,0,0.85)";
   ctx.fillRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
   
-  // Borde neón para el panel
   ctx.shadowBlur = 10;
   ctx.shadowColor = VAPORWAVE_COLORS[0];
   ctx.strokeStyle = VAPORWAVE_COLORS[1];
@@ -482,9 +522,9 @@ function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty:
   ctx.fillText("PRESS ANY KEY TO JOIN", CANVAS_WIDTH / 2, 85);
 
   const diffColors: Record<Difficulty, string> = {
-    easy: VAPORWAVE_COLORS[2], // Verde
-    normal: VAPORWAVE_COLORS[4], // Amarillo
-    hard: VAPORWAVE_COLORS[0], // Rosa
+    easy: VAPORWAVE_COLORS[2], 
+    normal: VAPORWAVE_COLORS[4], 
+    hard: VAPORWAVE_COLORS[0], 
   };
   const diffLabels: Record<Difficulty, string> = {
     easy: "EASY (1)",
@@ -590,7 +630,6 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
         ctx.shadowColor = player.color;
     }
 
-    // Fondo del carril más oscuro para contraste con matrix
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(BAR_PADDING_X, laneY, barWidth, BAR_HEIGHT);
 
@@ -667,7 +706,6 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
 }
 
 function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores: ScoreEntry[]) {
-  // Fondo oscuro para pantalla final
   ctx.fillStyle = "rgba(0,0,0,0.85)";
   ctx.fillRect(50, 50, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 100);
   ctx.strokeStyle = VAPORWAVE_COLORS[3];
