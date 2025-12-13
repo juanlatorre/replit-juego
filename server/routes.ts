@@ -46,10 +46,15 @@ export function registerRoutes(app: Express): Server {
       return;
     }
 
-    // Informar al cliente su ID
+    // Informar al cliente su ID y la lista completa de jugadores
     const playerIndex = globalRoom.players.length;
     console.log(`✅ Jugador ${playerIndex} unido exitosamente. Total: ${globalRoom.players.length} jugadores`);
+
+    // Send welcome message to the new player
     ws.send(JSON.stringify({ type: "WELCOME", playerId: playerIndex }));
+
+    // Send updated player list to ALL clients
+    globalRoom.broadcastPlayerList();
 
     ws.on("message", (data) => {
       try {

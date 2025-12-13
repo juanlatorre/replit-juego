@@ -50,7 +50,8 @@ export function ShrinkingBarGame() {
     setCallbacks,
     connectionType, // <--- TRAER ESTADO
     setConnectionType, // <--- TRAER FUNCIÓN
-    onlinePlayerCount // <--- NUEVO
+    onlinePlayerCount, // <--- NUEVO
+    onlinePlayers // <--- NUEVO
   } = useShrinkingBar();
 
   // ... (INICIALIZACIÓN DE FRACTALES y AUDIO: Mismo código que antes) ...
@@ -245,7 +246,7 @@ export function ShrinkingBarGame() {
 
       if (gameState === "lobby") {
         // === PASAMOS EL TIPO DE CONEXIÓN AL RENDER ===
-        drawLobby(ctx, players, difficulty, scores, speedRampEnabled, connectionType, onlinePlayerCount);
+        drawLobby(ctx, connectionType === "online" ? onlinePlayers : players, difficulty, scores, speedRampEnabled, connectionType, onlinePlayerCount);
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
         drawFloatingTexts(ctx, delta, floatingTextsRef.current);

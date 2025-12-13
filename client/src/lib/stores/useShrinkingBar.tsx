@@ -31,6 +31,7 @@ interface ShrinkingBarState {
   socket: WebSocket | null;
   myOnlineId: number | null;
   onlinePlayerCount: number;
+  onlinePlayers: Player[]; // Players in online lobby
   // ==========================
 
   onPlayerEliminated: ((player: Player) => void) | null;
@@ -94,6 +95,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   socket: null,
   myOnlineId: null,
   onlinePlayerCount: 0,
+  onlinePlayers: [],
 
   onPlayerEliminated: null,
   onPlayerBounce: null,
@@ -130,10 +132,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (type === "local") {
       const socket = get().socket;
       if (socket) socket.close();
-      set({ connectionType: "local", socket: null, myOnlineId: null, onlinePlayerCount: 0 });
+      set({ connectionType: "local", socket: null, myOnlineId: null, onlinePlayerCount: 0, onlinePlayers: [] });
       get().resetGame();
     } else {
-      set({ connectionType: "online", onlinePlayerCount: 0 });
+      set({ connectionType: "online", onlinePlayerCount: 0, onlinePlayers: [] });
       get().connectOnline();
     }
   },
@@ -176,9 +178,36 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       const msg = JSON.parse(event.data);
       const state = get();
 
+      // Define colors once to avoid redeclaration
+      const colors = ["#FF6B6B", "#4ECDC4", "#FFE66D", "#95E1D3", "#F38181", "#AA96DA", "#FCBAD3", "#A8D8EA"];
+
       switch (msg.type) {
         case "WELCOME":
-          set({ myOnlineId: msg.playerId, onlinePlayerCount: msg.playerId });
+          const newPlayers = [];
+
+          // Create player objects for all connected players
+          for (let i = 1; i <= msg.playerId; i++) {
+            newPlayers.push({
+              id: i,
+              key: `P${i}`,
+              color: colors[i - 1] || "#FFF",
+              x: 0.5,
+              minX: 0,
+              maxX: 1,
+              direction: 1 as 1 | -1,
+              speed: 0.35,
+              alive: true,
+              shields: 1,
+              laneY: 0,
+              isAI: false,
+            });
+          }
+
+          set({
+            myOnlineId: msg.playerId,
+            onlinePlayerCount: msg.playerId,
+            onlinePlayers: newPlayers
+          });
           console.log(`✅ Conectado como jugador ${msg.playerId}. Total: ${msg.playerId} jugadores`);
           break;
 
@@ -232,6 +261,29 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         case "DIFFICULTY_CHANGED":
           set({ difficulty: msg.difficulty });
           console.log(`⚙️ Dificultad cambiada a: ${msg.difficulty}`);
+          break;
+
+        case "PLAYER_LIST_UPDATE":
+          const updatedPlayers = msg.players.map((p: any) => ({
+            id: p.id,
+            key: `P${p.id}`,
+            color: p.color || colors[p.id - 1] || "#FFF",
+            x: 0.5,
+            minX: 0,
+            maxX: 1,
+            direction: 1 as 1 | -1,
+            speed: 0.35,
+            alive: true,
+            shields: 1,
+            laneY: 0,
+            isAI: false,
+          }));
+
+          set({
+            onlinePlayers: updatedPlayers,
+            onlinePlayerCount: msg.players.length
+          });
+          console.log(`📋 Lista de jugadores actualizada: ${msg.players.length} jugadores`);
           break;
       }
     };

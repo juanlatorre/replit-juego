@@ -79,6 +79,9 @@ export class GameRoom {
       `[Sala ${this.roomId}] Jugador desconectado. Restantes: ${this.players.length}`
     );
 
+    // Notify all clients about the updated player list
+    this.broadcastPlayerList();
+
     if (this.players.length < 2) {
       this.stopGame();
       // Reiniciar sala si queda vacía o con 1
@@ -114,6 +117,32 @@ export class GameRoom {
       type: "DIFFICULTY_CHANGED",
       difficulty: newDifficulty
     });
+  }
+
+  broadcastPlayerList() {
+    const playerList = this.players.map(p => ({
+      id: p.id,
+      color: this.getPlayerColor(p.id)
+    }));
+
+    this.broadcast({
+      type: "PLAYER_LIST_UPDATE",
+      players: playerList
+    });
+  }
+
+  private getPlayerColor(id: number): string {
+    const colors = [
+      "#FF6B6B",
+      "#4ECDC4",
+      "#FFE66D",
+      "#95E1D3",
+      "#F38181",
+      "#AA96DA",
+      "#FCBAD3",
+      "#A8D8EA"
+    ];
+    return colors[id - 1] || "#FFF";
   }
 
   handleInput(ws: WebSocket, type: string) {

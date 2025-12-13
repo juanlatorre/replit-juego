@@ -66,7 +66,11 @@ export function drawLobby(
   ctx.fillStyle = "#aaaaaa";
   const subText =
     connectionType === "online"
-      ? `WAITING FOR OPPONENTS... (${onlinePlayerCount}/2)`
+      ? onlinePlayerCount < 2
+        ? `WAITING FOR PLAYERS... (${onlinePlayerCount}/2)`
+        : onlinePlayerCount >= 2
+          ? "READY! Press SPACE to start"
+          : "Waiting for players..."
       : "PRESS ANY KEY TO JOIN";
   ctx.fillText(subText, CANVAS_WIDTH / 2, 85);
 
