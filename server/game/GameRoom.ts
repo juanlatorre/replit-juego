@@ -29,8 +29,13 @@ export class GameRoom {
   constructor(public roomId: string) {}
 
   addPlayer(ws: WebSocket): boolean {
+    console.log(`[Sala ${this.roomId}] Intentando añadir jugador. Actuales: ${this.players.length}/4, Juego activo: ${this.isActive}`);
+
     // Máximo 4 jugadores y no unirse si ya empezó
-    if (this.players.length >= 4 || this.isActive) return false;
+    if (this.players.length >= 4 || this.isActive) {
+      console.log(`[Sala ${this.roomId}] Rechazado: ${this.players.length >= 4 ? 'Sala llena' : 'Juego activo'}`);
+      return false;
+    }
 
     const id = this.players.length + 1;
     // Mismos colores que el frontend
@@ -58,7 +63,13 @@ export class GameRoom {
       shields: 1,
     });
 
-    console.log(`[Sala ${this.roomId}] Jugador ${id} conectado.`);
+    console.log(`[Sala ${this.roomId}] ✅ Jugador ${id} (color: ${colors[id - 1]}) conectado. Total: ${this.players.length} jugadores`);
+
+    // Check if we can start the game
+    if (this.players.length >= 2 && !this.isActive) {
+      console.log(`[Sala ${this.roomId}] 🎮 Listo para empezar! Hay ${this.players.length} jugadores. Esperando mensaje START...`);
+    }
+
     return true;
   }
 
@@ -78,7 +89,10 @@ export class GameRoom {
   handleInput(ws: WebSocket, type: string) {
     if (type === "START") {
       if (!this.isActive && this.players.length >= 2) {
+        console.log(`[Sala ${this.roomId}] 🎯 Iniciando juego con ${this.players.length} jugadores`);
         this.startGame();
+      } else {
+        console.log(`[Sala ${this.roomId}] ❌ No se puede iniciar: Activo=${this.isActive}, Jugadores=${this.players.length}`);
       }
       return;
     }

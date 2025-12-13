@@ -130,11 +130,36 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   connectOnline: () => {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const wsUrl = `${protocol}://${window.location.host}/ws`;
+    console.log(`🔌 Intentando conectar WebSocket a: ${wsUrl}`);
+    console.log(`🌐 Host actual: ${window.location.host}, Protocol: ${window.location.protocol}`);
+
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-      console.log("Conectado al servidor de juego");
+      console.log("✅ Conectado al servidor de juego");
     };
+
+    socket.onerror = (error) => {
+      console.error("❌ Error en WebSocket:", error);
+      console.error(`URL fallida: ${wsUrl}`);
+      console.error("Estado del WebSocket:", socket.readyState);
+    };
+
+    socket.onclose = (event) => {
+      console.log("🔌 WebSocket cerrado:", {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean
+      });
+    };
+
+    // Add connection timeout
+    setTimeout(() => {
+      if (socket.readyState === WebSocket.CONNECTING) {
+        console.error("⏰ Conexión WebSocket agotada (timeout)");
+        socket.close();
+      }
+    }, 5000);
 
     socket.onmessage = (event) => {
       const msg = JSON.parse(event.data);
