@@ -48,7 +48,7 @@ interface ShrinkingBarState {
   scores: ScoreEntry[];
   nextParticleId: number;
   speedRampEnabled: boolean;
-  countdown: number; // <--- NUEVO
+  countdown: number;
   onPlayerEliminated: ((player: Player) => void) | null;
   onPlayerBounce: (() => void) | null;
   onGameEnd: ((winner: Player | null) => void) | null;
@@ -60,7 +60,7 @@ interface ShrinkingBarState {
   startGame: () => void;
   startPracticeGame: () => void;
   updatePlayers: (delta: number) => void;
-  updateCountdown: (delta: number) => void; // <--- NUEVO
+  updateCountdown: (delta: number) => void;
   handlePlayerInput: (key: string) => void;
   killPlayer: (playerId: number) => void;
   checkWinner: () => void;
@@ -105,7 +105,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   scores: [],
   nextParticleId: 0,
   speedRampEnabled: false,
-  countdown: 0, // <--- NUEVO
+  countdown: 0,
   onPlayerEliminated: null,
   onPlayerBounce: null,
   onGameEnd: null,
@@ -161,7 +161,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (state.gameState !== "lobby") return;
     if (state.players.length < 2) return;
 
-    // Cambiamos a 'countdown' y ponemos 3 segundos
     set({ gameState: "countdown", countdown: 3 });
   },
 
@@ -185,7 +184,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       isAI: true,
     };
 
-    // Cambiamos a 'countdown' y ponemos 3 segundos
     set({
       gameState: "countdown",
       countdown: 3,
@@ -194,21 +192,18 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     });
   },
 
-  // === NUEVA FUNCIÓN PARA EL LOOP DEL CONTADOR ===
   updateCountdown: (delta: number) => {
     const state = get();
     if (state.gameState !== "countdown") return;
     
     const newTime = state.countdown - delta;
     
-    // Si llegamos a 0, empezamos el juego de verdad
     if (newTime <= 0) {
       set({ gameState: "playing", countdown: 0 });
     } else {
       set({ countdown: newTime });
     }
   },
-  // ==============================================
 
   updatePlayers: (delta: number) => {
     const state = get();
@@ -290,9 +285,36 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     const playerIndex = state.players.findIndex(
       (p) => p.key === key.toLowerCase() && p.alive && !p.isAI
     );
+    
     if (playerIndex === -1) return;
 
     const player = state.players[playerIndex];
+    
+    // === CÁLCULO DE PARTICULAS AL RECORTAR ===
+    let explosionX = -1;
+
+    // Si vamos a la derecha, se corta lo que queda a la derecha (desde x hasta maxX)
+    if (player.direction === 1) {
+        if (player.x < player.maxX) {
+            explosionX = (player.x + player.maxX) / 2;
+        }
+    } 
+    // Si vamos a la izquierda, se corta lo que queda a la izquierda (desde minX hasta x)
+    else {
+        if (player.x > player.minX) {
+            explosionX = (player.minX + player.x) / 2;
+        }
+    }
+
+    if (explosionX !== -1) {
+        const laneY = 80 + playerIndex * 100 + 15; // Centro vertical del carril
+        const screenX = 50 + explosionX * 700;    // Posición horizontal en pixeles
+        
+        // Generamos partículas (menos cantidad que al morir, ej: 12)
+        get().addParticles(screenX, laneY, player.color, 12);
+    }
+    // ==========================================
+
     const GRACE_MARGIN = 0.02;
 
     let newMinX = player.minX;
@@ -306,6 +328,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
     const barWidth = newMaxX - newMinX;
     let newX: number;
+
     if (barWidth < GRACE_MARGIN * 2) {
       newX = (newMinX + newMaxX) / 2;
     } else {
@@ -315,7 +338,9 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         newX = Math.min(newMaxX - GRACE_MARGIN, player.x + GRACE_MARGIN);
       }
     }
+
     newX = Math.max(newMinX + 0.001, Math.min(newMaxX - 0.001, newX));
+
     const newDirection = player.direction === 1 ? -1 : 1;
 
     const updatedPlayers = [...state.players];
@@ -379,7 +404,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       usedKeys: new Set<string>(),
       particles: [],
       gameMode: "multiplayer",
-      countdown: 0, // Reset contador
+      countdown: 0,
     });
   },
 
@@ -396,7 +421,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       speed: baseSpeed
     }));
 
-    // Cambiamos a 'countdown' con 3 segundos
     set({
       gameState: "countdown",
       players: resetPlayers,
