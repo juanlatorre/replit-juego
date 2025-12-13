@@ -34,6 +34,16 @@ interface FractalEntity {
     colorOffset: number;   
 }
 
+// NUEVA INTERFAZ PARA TEXTOS FLOTANTES
+interface FloatingText {
+    x: number;
+    y: number;
+    text: string;
+    life: number; // 1.0 a 0.0
+    color: string;
+    size: number;
+}
+
 export function ShrinkingBarGame() {
   const musicRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -42,6 +52,10 @@ export function ShrinkingBarGame() {
 
   const matrixDropsRef = useRef<number[]>(Array(Math.floor(CANVAS_WIDTH / FONT_SIZE)).fill(1));
   const fractalsRef = useRef<FractalEntity[]>([]);
+  
+  // === REFS TEXTOS FLOTANTES ===
+  const floatingTextsRef = useRef<FloatingText[]>([]);
+  // ============================
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
@@ -175,19 +189,40 @@ export function ShrinkingBarGame() {
           const bounce = hitSoundRef.current.cloneNode() as HTMLAudioElement;
           bounce.volume = 0.7; 
           bounce.playbackRate = 3.0;
-          // @ts-ignore
           if (bounce.preservesPitch !== undefined) bounce.preservesPitch = false;
           bounce.play().catch(() => {});
         }
       },
-      onShieldBreak: () => { // <--- SONIDO AL ROMPER ESCUDO
+      onShieldBreak: () => { 
         if (hitSoundRef.current) {
-           // Usamos un tono medio para indicar "Ouch, pero sigues vivo"
            const bounce = hitSoundRef.current.cloneNode() as HTMLAudioElement;
            bounce.volume = 0.5;
-           bounce.playbackRate = 0.5; // Más grave que el rebote normal
+           bounce.playbackRate = 0.5; 
            bounce.play().catch(() => {});
         }
+      },
+      onPerfectPivot: (player) => { // <--- NUEVO: EFECTO PERFECTO
+        // 1. Sonido especial
+        if (successSoundRef.current) {
+            const perfectSnd = successSoundRef.current.cloneNode() as HTMLAudioElement;
+            perfectSnd.volume = 0.8;
+            perfectSnd.playbackRate = 1.2; // Más agudo y feliz
+            perfectSnd.play().catch(() => {});
+        }
+
+        // 2. Agregar texto flotante
+        // Calculamos posición en pantalla del jugador
+        const laneY = 80 + (player.id - 1) * 100 + 15;
+        const playerXPx = BAR_PADDING_X + player.x * (CANVAS_WIDTH - BAR_PADDING_X * 2);
+        
+        floatingTextsRef.current.push({
+            x: playerXPx,
+            y: laneY - 20,
+            text: "PERFECT!",
+            life: 1.0,
+            color: "#FFD700", // Gold
+            size: 24
+        });
       },
       onGameEnd: (winner) => {
         if (winner && successSoundRef.current) {
@@ -402,6 +437,33 @@ export function ShrinkingBarGame() {
 
   }, [drawMatrixRain]);
 
+  // === DIBUJAR TEXTOS FLOTANTES ===
+  const drawFloatingTexts = useCallback((ctx: CanvasRenderingContext2D, delta: number) => {
+      // Filtrar muertos
+      floatingTextsRef.current = floatingTextsRef.current.filter(t => t.life > 0);
+
+      floatingTextsRef.current.forEach(t => {
+          t.life -= delta * 1.5; // Decaer
+          t.y -= delta * 50; // Flotar hacia arriba
+
+          ctx.save();
+          ctx.globalAlpha = t.life;
+          ctx.fillStyle = t.color;
+          ctx.shadowColor = t.color;
+          ctx.shadowBlur = 10;
+          ctx.font = `bold ${t.size}px monospace`;
+          ctx.textAlign = "center";
+          
+          // Efecto de escala pop-up
+          const scale = 1 + Math.sin((1 - t.life) * Math.PI) * 0.5;
+          ctx.translate(t.x, t.y);
+          ctx.scale(scale, scale);
+          
+          ctx.fillText(t.text, 0, 0);
+          ctx.restore();
+      });
+  }, []);
+
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D, delta: number) => {
       drawVisualizerBg(ctx, delta);
@@ -417,6 +479,8 @@ export function ShrinkingBarGame() {
         drawLobby(ctx, players, difficulty, scores, speedRampEnabled);
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
+        // Dibujar textos encima del juego
+        drawFloatingTexts(ctx, delta);
       } else if (gameState === "countdown") {
         drawPlaying(ctx, players, particles); 
         drawCountdown(ctx, countdown);
@@ -426,7 +490,7 @@ export function ShrinkingBarGame() {
 
       ctx.restore();
     },
-    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled, countdown, screenShake, drawVisualizerBg]
+    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled, countdown, screenShake, drawVisualizerBg, drawFloatingTexts]
   );
 
   const gameLoop = useCallback(
@@ -781,7 +845,7 @@ function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores:
     ctx.font = "14px monospace";
     sortedScores.slice(0, 4).forEach((score, i) => {
       ctx.fillStyle = score.color;
-      ctx.fillText(`[${score.key.toUpperCase()}]: ${score.wins} WINS`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 75 + i * 20);
+      ctx.fillText(`[${score.key.toUpperCase()}]: ${score.wins} WINS`, 70, 420 + i * 18);
     });
   }
 
