@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
-import { useShrinkingBar, type Player } from "@/lib/stores/useShrinkingBar";
+import { useShrinkingBar, type Player, type Particle, type ScoreEntry, type Difficulty } from "@/lib/stores/useShrinkingBar";
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 500;
@@ -11,26 +11,75 @@ export function ShrinkingBarGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
+  
+  const hitSoundRef = useRef<HTMLAudioElement | null>(null);
+  const successSoundRef = useRef<HTMLAudioElement | null>(null);
 
   const {
     gameState,
+    gameMode,
+    difficulty,
     players,
     winner,
+    particles,
+    scores,
     joinPlayer,
     startGame,
+    startPracticeGame,
     updatePlayers,
+    updateParticles,
     handlePlayerInput,
     resetGame,
+    resetScores,
+    setDifficulty,
+    setCallbacks,
   } = useShrinkingBar();
+
+  useEffect(() => {
+    hitSoundRef.current = new Audio("/sounds/hit.mp3");
+    hitSoundRef.current.volume = 0.3;
+    successSoundRef.current = new Audio("/sounds/success.mp3");
+    successSoundRef.current.volume = 0.5;
+
+    setCallbacks({
+      onPlayerEliminated: () => {
+        if (hitSoundRef.current) {
+          hitSoundRef.current.currentTime = 0;
+          hitSoundRef.current.play().catch(() => {});
+        }
+      },
+      onPlayerBounce: () => {
+        if (hitSoundRef.current) {
+          const bounce = hitSoundRef.current.cloneNode() as HTMLAudioElement;
+          bounce.volume = 0.15;
+          bounce.play().catch(() => {});
+        }
+      },
+      onGameEnd: (winner) => {
+        if (winner && successSoundRef.current) {
+          successSoundRef.current.currentTime = 0;
+          successSoundRef.current.play().catch(() => {});
+        }
+      },
+    });
+  }, [setCallbacks]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       const key = e.key;
 
       if (gameState === "lobby") {
-        if (key === " " && players.length >= 2) {
+        if (key === "1") {
+          setDifficulty("easy");
+        } else if (key === "2") {
+          setDifficulty("normal");
+        } else if (key === "3") {
+          setDifficulty("hard");
+        } else if (key === " " && players.length >= 2) {
           startGame();
-        } else if (key !== " ") {
+        } else if (key.toLowerCase() === "m" && players.length >= 1) {
+          startPracticeGame();
+        } else if (key !== " " && key.toLowerCase() !== "m") {
           joinPlayer(key);
         }
       } else if (gameState === "playing") {
@@ -38,10 +87,12 @@ export function ShrinkingBarGame() {
       } else if (gameState === "ended") {
         if (key.toLowerCase() === "r") {
           resetGame();
+        } else if (key.toLowerCase() === "c") {
+          resetScores();
         }
       }
     },
-    [gameState, players.length, joinPlayer, startGame, handlePlayerInput, resetGame]
+    [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, resetScores, setDifficulty]
   );
 
   useEffect(() => {
@@ -55,14 +106,14 @@ export function ShrinkingBarGame() {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       if (gameState === "lobby") {
-        drawLobby(ctx, players);
+        drawLobby(ctx, players, difficulty, scores);
       } else if (gameState === "playing") {
-        drawPlaying(ctx, players);
+        drawPlaying(ctx, players, particles);
       } else if (gameState === "ended") {
-        drawEnded(ctx, winner);
+        drawEnded(ctx, winner, scores);
       }
     },
-    [gameState, players, winner]
+    [gameState, players, winner, particles, difficulty, scores]
   );
 
   const gameLoop = useCallback(
@@ -78,13 +129,14 @@ export function ShrinkingBarGame() {
 
       if (gameState === "playing") {
         updatePlayers(delta);
+        updateParticles(delta);
       }
 
       drawGame(ctx);
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     },
-    [gameState, updatePlayers, drawGame]
+    [gameState, updatePlayers, updateParticles, drawGame]
   );
 
   useEffect(() => {
@@ -101,63 +153,115 @@ export function ShrinkingBarGame() {
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700 rounded-lg"
       />
-      <div className="mt-4 text-gray-400 text-sm">
+      <div className="mt-4 text-gray-400 text-sm text-center">
         {gameState === "lobby" && (
-          <p>Presiona cualquier tecla para unirte | SPACE para iniciar (min 2 jugadores)</p>
+          <>
+            <p>Presiona cualquier tecla para unirte | SPACE para iniciar (min 2 jugadores)</p>
+            <p className="mt-1">M para modo practica (1 jugador vs IA) | 1/2/3 para cambiar dificultad</p>
+          </>
         )}
         {gameState === "playing" && (
           <p>Presiona tu tecla asignada para rebotar y recortar tu barra</p>
         )}
         {gameState === "ended" && (
-          <p>Presiona R para reiniciar</p>
+          <p>R para reiniciar | C para borrar puntuaciones</p>
         )}
       </div>
     </div>
   );
 }
 
-function drawLobby(ctx: CanvasRenderingContext2D, players: Player[]) {
+function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty: Difficulty, scores: ScoreEntry[]) {
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 24px Inter, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("LOBBY", CANVAS_WIDTH / 2, 50);
+  ctx.fillText("LOBBY", CANVAS_WIDTH / 2, 40);
 
-  ctx.font = "18px Inter, sans-serif";
+  ctx.font = "14px Inter, sans-serif";
   ctx.fillStyle = "#aaaaaa";
-  ctx.fillText("Presiona cualquier tecla para unirte", CANVAS_WIDTH / 2, 80);
+  ctx.fillText("Presiona cualquier tecla para unirte", CANVAS_WIDTH / 2, 65);
+
+  const diffColors: Record<Difficulty, string> = {
+    easy: "#4ECDC4",
+    normal: "#FFE66D",
+    hard: "#FF6B6B",
+  };
+  const diffLabels: Record<Difficulty, string> = {
+    easy: "Facil (1)",
+    normal: "Normal (2)",
+    hard: "Dificil (3)",
+  };
+
+  ctx.font = "16px Inter, sans-serif";
+  ctx.fillStyle = "#888888";
+  ctx.fillText("Dificultad:", CANVAS_WIDTH / 2, 95);
+
+  const startX = CANVAS_WIDTH / 2 - 150;
+  (["easy", "normal", "hard"] as Difficulty[]).forEach((d, i) => {
+    const x = startX + i * 100;
+    ctx.fillStyle = d === difficulty ? diffColors[d] : "#444444";
+    ctx.fillRect(x, 105, 90, 25);
+    ctx.fillStyle = d === difficulty ? "#000000" : "#888888";
+    ctx.font = "12px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(diffLabels[d], x + 45, 122);
+  });
 
   if (players.length > 0) {
     ctx.font = "16px Inter, sans-serif";
     players.forEach((player, index) => {
-      const y = 130 + index * 50;
+      const y = 160 + index * 45;
       
       ctx.fillStyle = player.color;
-      ctx.fillRect(CANVAS_WIDTH / 2 - 150, y - 15, 300, 40);
+      ctx.fillRect(CANVAS_WIDTH / 2 - 140, y - 12, 280, 35);
       
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
       ctx.fillText(
         `Jugador ${player.id} - Tecla: "${player.key.toUpperCase()}"`,
         CANVAS_WIDTH / 2,
-        y + 10
+        y + 8
       );
+    });
+  }
+
+  if (scores.length > 0) {
+    ctx.fillStyle = "#FFE66D";
+    ctx.font = "bold 14px Inter, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Puntuaciones:", 20, 400);
+    
+    const sortedScores = [...scores].sort((a, b) => b.wins - a.wins);
+    sortedScores.slice(0, 4).forEach((score, i) => {
+      ctx.fillStyle = score.color;
+      ctx.font = "12px Inter, sans-serif";
+      ctx.fillText(`[${score.key.toUpperCase()}]: ${score.wins} victoria${score.wins !== 1 ? 's' : ''}`, 20, 420 + i * 18);
     });
   }
 
   if (players.length >= 2) {
     ctx.fillStyle = "#4ECDC4";
-    ctx.font = "bold 20px Inter, sans-serif";
+    ctx.font = "bold 18px Inter, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Presiona SPACE para iniciar", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 50);
-  } else if (players.length === 1) {
-    ctx.fillStyle = "#FFE66D";
+    ctx.fillText("SPACE para iniciar", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60);
+  }
+  
+  if (players.length >= 1) {
+    ctx.fillStyle = "#AA96DA";
+    ctx.font = "14px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("M para modo practica (vs IA)", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 35);
+  }
+  
+  if (players.length === 0) {
+    ctx.fillStyle = "#666666";
     ctx.font = "16px Inter, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Esperando más jugadores... (mínimo 2)", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 50);
+    ctx.fillText("Esperando jugadores...", CANVAS_WIDTH / 2, 200);
   }
 }
 
-function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[]) {
+function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles: Particle[]) {
   const barWidth = CANVAS_WIDTH - BAR_PADDING_X * 2;
 
   players.forEach((player, index) => {
@@ -210,28 +314,54 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[]) {
     ctx.fillStyle = player.color;
     ctx.font = "14px Inter, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(`J${player.id} [${player.key.toUpperCase()}]`, BAR_PADDING_X, laneY - 8);
+    const label = player.isAI ? `IA` : `J${player.id} [${player.key.toUpperCase()}]`;
+    ctx.fillText(label, BAR_PADDING_X, laneY - 8);
   });
+
+  particles.forEach((particle) => {
+    ctx.globalAlpha = particle.life / particle.maxLife;
+    ctx.fillStyle = particle.color;
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, particle.size * (particle.life / particle.maxLife), 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
 }
 
-function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null) {
+function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores: ScoreEntry[]) {
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 36px Inter, sans-serif";
   ctx.textAlign = "center";
 
   if (winner) {
     ctx.fillStyle = winner.color;
-    ctx.fillText(`¡JUGADOR ${winner.id} GANA!`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+    const winnerLabel = winner.isAI ? "¡LA IA GANA!" : `¡JUGADOR ${winner.id} GANA!`;
+    ctx.fillText(winnerLabel, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
     
-    ctx.font = "20px Inter, sans-serif";
-    ctx.fillStyle = "#aaaaaa";
-    ctx.fillText(`Tecla: "${winner.key.toUpperCase()}"`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
+    if (!winner.isAI) {
+      ctx.font = "20px Inter, sans-serif";
+      ctx.fillStyle = "#aaaaaa";
+      ctx.fillText(`Tecla: "${winner.key.toUpperCase()}"`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    }
   } else {
     ctx.fillStyle = "#ff6b6b";
-    ctx.fillText("¡EMPATE!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    ctx.fillText("¡EMPATE!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+  }
+
+  if (scores.length > 0) {
+    ctx.font = "bold 16px Inter, sans-serif";
+    ctx.fillStyle = "#FFE66D";
+    ctx.fillText("Tabla de Puntuaciones", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
+    
+    const sortedScores = [...scores].sort((a, b) => b.wins - a.wins);
+    ctx.font = "14px Inter, sans-serif";
+    sortedScores.slice(0, 4).forEach((score, i) => {
+      ctx.fillStyle = score.color;
+      ctx.fillText(`[${score.key.toUpperCase()}]: ${score.wins} victoria${score.wins !== 1 ? 's' : ''}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 75 + i * 20);
+    });
   }
 
   ctx.fillStyle = "#4ECDC4";
   ctx.font = "18px Inter, sans-serif";
-  ctx.fillText("Presiona R para reiniciar", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 80);
+  ctx.fillText("R para reiniciar | C para borrar puntuaciones", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 40);
 }
