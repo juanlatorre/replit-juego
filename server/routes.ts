@@ -62,6 +62,9 @@ export function registerRoutes(app: Express): Server {
         } else if (msg.type === "START") {
           console.log(`🎮 Solicitud para iniciar juego recibida. Jugadores: ${globalRoom.players.length}, Activo: ${globalRoom.isActive}`);
           globalRoom.handleInput(ws, "START");
+        } else if (msg.type === "REMATCH") {
+          console.log(`🔄 Solicitud de revancha recibida.`);
+          globalRoom.handleRematch();
         }
       } catch (e) {
         console.error("❌ Error procesando mensaje WS:", e);

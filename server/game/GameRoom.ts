@@ -86,6 +86,25 @@ export class GameRoom {
     }
   }
 
+  handleRematch() {
+    console.log(`[Sala ${this.roomId}] 🔄 Iniciando revancha con ${this.players.length} jugadores`);
+
+    // Resetear jugadores
+    this.players.forEach((p) => {
+      p.x = 0.5;
+      p.minX = 0;
+      p.maxX = 1;
+      p.alive = true;
+      p.shields = 1;
+      p.speed = SPEED_BY_DIFFICULTY[this.difficulty];
+      // Dirección aleatoria
+      p.direction = Math.random() > 0.5 ? 1 : -1;
+    });
+
+    // Iniciar juego
+    this.startGame();
+  }
+
   handleInput(ws: WebSocket, type: string) {
     if (type === "START") {
       if (!this.isActive && this.players.length >= 2) {

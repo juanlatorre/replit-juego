@@ -583,7 +583,13 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   rematch: () => {
     const state = get();
-    if (state.connectionType === "online") return; // Server handles this
+    if (state.connectionType === "online") {
+      // Send REMATCH to server
+      if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+        state.socket.send(JSON.stringify({ type: "REMATCH" }));
+      }
+      return;
+    }
 
     const baseSpeed = SPEED_BY_DIFFICULTY[state.difficulty];
     const resetPlayers = state.players.map((p) => ({
