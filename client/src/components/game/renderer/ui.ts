@@ -38,7 +38,8 @@ export function drawLobby(
   difficulty: Difficulty,
   scores: ScoreEntry[],
   speedRampEnabled: boolean,
-  connectionType: "local" | "online" // <--- NUEVO PARÁMETRO
+  connectionType: "local" | "online", // <--- NUEVO PARÁMETRO
+  onlinePlayerCount: number // <--- NUEVO PARÁMETRO
 ) {
   ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.fillRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
@@ -65,7 +66,7 @@ export function drawLobby(
   ctx.fillStyle = "#aaaaaa";
   const subText =
     connectionType === "online"
-      ? "WAITING FOR OPPONENTS..."
+      ? `WAITING FOR OPPONENTS... (${onlinePlayerCount}/2)`
       : "PRESS ANY KEY TO JOIN";
   ctx.fillText(subText, CANVAS_WIDTH / 2, 85);
 

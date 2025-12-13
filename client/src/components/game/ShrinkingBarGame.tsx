@@ -49,7 +49,8 @@ export function ShrinkingBarGame() {
     toggleSpeedRamp,
     setCallbacks,
     connectionType, // <--- TRAER ESTADO
-    setConnectionType // <--- TRAER FUNCIÓN
+    setConnectionType, // <--- TRAER FUNCIÓN
+    onlinePlayerCount // <--- NUEVO
   } = useShrinkingBar();
 
   // ... (INICIALIZACIÓN DE FRACTALES y AUDIO: Mismo código que antes) ...
@@ -212,7 +213,7 @@ export function ShrinkingBarGame() {
         else if (key === "3") setDifficulty("hard");
         else if (key.toLowerCase() === "s") toggleSpeedRamp();
         else if (key.toLowerCase() === "o") setConnectionType(connectionType === 'local' ? 'online' : 'local'); // TOGGLE TECLA
-        else if (key === " " && players.length >= 2) startGame();
+        else if (key === " " && (connectionType === "online" ? onlinePlayerCount >= 2 : players.length >= 2)) startGame();
         else if (key.toLowerCase() === "m" && players.length >= 1) startPracticeGame();
         else if (key !== " " && key.toLowerCase() !== "m" && key.toLowerCase() !== "o") joinPlayer(key);
       } else if (gameState === "playing") {
@@ -244,7 +245,7 @@ export function ShrinkingBarGame() {
 
       if (gameState === "lobby") {
         // === PASAMOS EL TIPO DE CONEXIÓN AL RENDER ===
-        drawLobby(ctx, players, difficulty, scores, speedRampEnabled, connectionType);
+        drawLobby(ctx, players, difficulty, scores, speedRampEnabled, connectionType, onlinePlayerCount);
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
         drawFloatingTexts(ctx, delta, floatingTextsRef.current);

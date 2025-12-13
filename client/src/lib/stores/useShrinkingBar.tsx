@@ -30,6 +30,7 @@ interface ShrinkingBarState {
   connectionType: "local" | "online";
   socket: WebSocket | null;
   myOnlineId: number | null;
+  onlinePlayerCount: number;
   // ==========================
 
   onPlayerEliminated: ((player: Player) => void) | null;
@@ -92,6 +93,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   connectionType: "local",
   socket: null,
   myOnlineId: null,
+  onlinePlayerCount: 0,
 
   onPlayerEliminated: null,
   onPlayerBounce: null,
@@ -119,10 +121,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (type === "local") {
       const socket = get().socket;
       if (socket) socket.close();
-      set({ connectionType: "local", socket: null, myOnlineId: null });
+      set({ connectionType: "local", socket: null, myOnlineId: null, onlinePlayerCount: 0 });
       get().resetGame();
     } else {
-      set({ connectionType: "online" });
+      set({ connectionType: "online", onlinePlayerCount: 0 });
       get().connectOnline();
     }
   },
@@ -167,7 +169,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
       switch (msg.type) {
         case "WELCOME":
-          set({ myOnlineId: msg.playerId });
+          set({ myOnlineId: msg.playerId, onlinePlayerCount: msg.playerId });
+          console.log(`✅ Conectado como jugador ${msg.playerId}. Total: ${msg.playerId} jugadores`);
           break;
 
         case "GAME_START":
