@@ -24,6 +24,7 @@ export function ShrinkingBarGame() {
     winner,
     particles,
     scores,
+    speedRampEnabled, // <--- NUEVO
     joinPlayer,
     startGame,
     startPracticeGame,
@@ -33,16 +34,15 @@ export function ShrinkingBarGame() {
     resetGame,
     resetScores,
     setDifficulty,
+    toggleSpeedRamp, // <--- NUEVO
     setCallbacks,
   } = useShrinkingBar();
 
   useEffect(() => {
-    // 2. Cargar el audio (la ruta es relativa a la carpeta public)
     musicRef.current = new Audio('/sounds/cat.mp3');
-    musicRef.current.loop = true; // ¡Que no pare nunca!
-    musicRef.current.volume = 0.4; // Ajusta el volumen (0.0 a 1.0)
+    musicRef.current.loop = true;
+    musicRef.current.volume = 0.4;
 
-    // 3. Intentar reproducir (los navegadores a veces bloquean el audio automático)
     const playMusic = async () => {
       try {
         await musicRef.current?.play();
@@ -53,12 +53,11 @@ export function ShrinkingBarGame() {
 
     playMusic();
 
-    // 4. Limpieza: Pausar si te sales del juego
     return () => {
       musicRef.current?.pause();
       musicRef.current = null;
     };
-  }, []); // El [] asegura que solo se ejecute al montar el componente
+  }, []);
 
   useEffect(() => {
     hitSoundRef.current = new Audio("/sounds/hit.mp3");
@@ -100,6 +99,8 @@ export function ShrinkingBarGame() {
           setDifficulty("normal");
         } else if (key === "3") {
           setDifficulty("hard");
+        } else if (key.toLowerCase() === "s") { // <--- NUEVO: Tecla S
+          toggleSpeedRamp();
         } else if (key === " " && players.length >= 2) {
           startGame();
         } else if (key.toLowerCase() === "m" && players.length >= 1) {
@@ -117,7 +118,7 @@ export function ShrinkingBarGame() {
         }
       }
     },
-    [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, resetScores, setDifficulty]
+    [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, resetScores, setDifficulty, toggleSpeedRamp]
   );
 
   useEffect(() => {
@@ -131,14 +132,14 @@ export function ShrinkingBarGame() {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       if (gameState === "lobby") {
-        drawLobby(ctx, players, difficulty, scores);
+        drawLobby(ctx, players, difficulty, scores, speedRampEnabled); // <--- NUEVO: Pasamos speedRampEnabled
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
       } else if (gameState === "ended") {
         drawEnded(ctx, winner, scores);
       }
     },
-    [gameState, players, winner, particles, difficulty, scores]
+    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled]
   );
 
   const gameLoop = useCallback(
@@ -182,7 +183,7 @@ export function ShrinkingBarGame() {
         {gameState === "lobby" && (
           <>
             <p>Presiona cualquier tecla para unirte | SPACE para iniciar (min 2 jugadores)</p>
-            <p className="mt-1">M para modo practica (1 jugador vs IA) | 1/2/3 para cambiar dificultad</p>
+            <p className="mt-1">M: Modo práctica | 1-3: Dificultad | S: Velocidad Progresiva</p>
           </>
         )}
         {gameState === "playing" && (
@@ -196,7 +197,7 @@ export function ShrinkingBarGame() {
   );
 }
 
-function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty: Difficulty, scores: ScoreEntry[]) {
+function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty: Difficulty, scores: ScoreEntry[], speedRampEnabled: boolean) {
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 24px Inter, sans-serif";
   ctx.textAlign = "center";
@@ -232,10 +233,23 @@ function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty:
     ctx.fillText(diffLabels[d], x + 45, 122);
   });
 
+  // === DIBUJAR ESTADO DE VELOCIDAD ===
+  const rampY = 145;
+  ctx.font = "14px Inter, sans-serif";
+  ctx.textAlign = "center";
+  if (speedRampEnabled) {
+    ctx.fillStyle = "#FF5555";
+    ctx.fillText(">> VELOCIDAD PROGRESIVA: ON (S) <<", CANVAS_WIDTH / 2, rampY);
+  } else {
+    ctx.fillStyle = "#444444";
+    ctx.fillText("Velocidad Progresiva: OFF (S)", CANVAS_WIDTH / 2, rampY);
+  }
+  // ===================================
+
   if (players.length > 0) {
     ctx.font = "16px Inter, sans-serif";
     players.forEach((player, index) => {
-      const y = 160 + index * 45;
+      const y = 170 + index * 45; // Ajusté un poco la Y para dar espacio al nuevo texto
       
       ctx.fillStyle = player.color;
       ctx.fillRect(CANVAS_WIDTH / 2 - 140, y - 12, 280, 35);
@@ -282,7 +296,7 @@ function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty:
     ctx.fillStyle = "#666666";
     ctx.font = "16px Inter, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Esperando jugadores...", CANVAS_WIDTH / 2, 200);
+    ctx.fillText("Esperando jugadores...", CANVAS_WIDTH / 2, 220);
   }
 }
 
