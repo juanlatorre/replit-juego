@@ -36,20 +36,12 @@ interface FractalEntity {
 
 export function ShrinkingBarGame() {
   const musicRef = useRef<HTMLAudioElement | null>(null);
-  
-  // === WEB AUDIO API REFS ===
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
-  // ==========================
 
-  // === MATRIX RAIN REFS ===
   const matrixDropsRef = useRef<number[]>(Array(Math.floor(CANVAS_WIDTH / FONT_SIZE)).fill(1));
-  // ========================
-
-  // === FRACTAL SWARM REFS ===
   const fractalsRef = useRef<FractalEntity[]>([]);
-  // ==========================
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
@@ -103,7 +95,7 @@ export function ShrinkingBarGame() {
           entities.push({
               x: Math.random() * CANVAS_WIDTH,
               y: Math.random() * CANVAS_HEIGHT,
-              vx: (Math.random() - 0.5) * 100, // Velocidad inicial tranquila
+              vx: (Math.random() - 0.5) * 100, 
               vy: (Math.random() - 0.5) * 100,
               sizeScale: 0.3 + Math.random() * 0.7, 
               phase: Math.random() * Math.PI * 2,
@@ -188,6 +180,15 @@ export function ShrinkingBarGame() {
           bounce.play().catch(() => {});
         }
       },
+      onShieldBreak: () => { // <--- SONIDO AL ROMPER ESCUDO
+        if (hitSoundRef.current) {
+           // Usamos un tono medio para indicar "Ouch, pero sigues vivo"
+           const bounce = hitSoundRef.current.cloneNode() as HTMLAudioElement;
+           bounce.volume = 0.5;
+           bounce.playbackRate = 0.5; // Más grave que el rebote normal
+           bounce.play().catch(() => {});
+        }
+      },
       onGameEnd: (winner) => {
         if (winner && successSoundRef.current) {
           successSoundRef.current.currentTime = 0;
@@ -197,20 +198,14 @@ export function ShrinkingBarGame() {
     });
   }, [setCallbacks]);
 
-  // === INPUT JUGADOR: AHORA CON FÍSICA VIOLENTA ===
   const handlePlayerInput = useCallback((key: string) => {
       storeHandlePlayerInput(key);
 
-      // CAOS EXTREMO: Cuando alguien juega, el fondo EXPLOTA en nuevas direcciones
       fractalsRef.current.forEach(f => {
-          // Generamos una velocidad brutal (entre 800 y 2000 pixels por segundo)
           const speed = 800 + Math.random() * 1200; 
-          const angle = Math.random() * Math.PI * 2; // Dirección totalmente aleatoria
-          
+          const angle = Math.random() * Math.PI * 2; 
           f.vx = Math.cos(angle) * speed;
           f.vy = Math.sin(angle) * speed;
-          
-          // Giro también violento (entre -25 y 25 radianes por segundo)
           f.rotationSpeed = (Math.random() - 0.5) * 50; 
       });
 
@@ -263,7 +258,6 @@ export function ShrinkingBarGame() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // === DIBUJAR LLUVIA MATRIX (LENTA) ===
   const drawMatrixRain = useCallback((ctx: CanvasRenderingContext2D) => {
     ctx.fillStyle = "rgba(0, 0, 0, 0.08)"; 
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -291,7 +285,6 @@ export function ShrinkingBarGame() {
     }
   }, []);
 
-  // === DIBUJAR VISUALIZADOR MULTI-FORMA ===
   const drawVisualizerBg = useCallback((ctx: CanvasRenderingContext2D, delta: number) => {
     const analyser = analyserRef.current;
     const dataArray = dataArrayRef.current;
@@ -304,30 +297,24 @@ export function ShrinkingBarGame() {
     analyser.getByteFrequencyData(dataArray);
     const bufferLength = dataArray.length;
     
-    // Bajos para Zoom
     let bass = 0;
     for(let i = 0; i < 10; i++) bass += dataArray[i];
     bass = bass / 10 / 255;
 
     const time = performance.now() / 1000;
 
-    // 1. DIBUJAR MATRIX DE FONDO
     drawMatrixRain(ctx);
 
-    // 2. CAPA UNIFICADORA
     ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; 
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // 3. ACTUALIZAR Y DIBUJAR ENTIDADES
     const entities = fractalsRef.current;
     
     entities.forEach((f, fIndex) => {
-        // --- FÍSICA ---
         f.x += f.vx * delta;
         f.y += f.vy * delta;
         f.phase += f.rotationSpeed * delta; 
 
-        // Rebote agresivo en bordes
         if (f.x < -50) { f.x = -50; f.vx *= -1; }
         if (f.x > CANVAS_WIDTH + 50) { f.x = CANVAS_WIDTH + 50; f.vx *= -1; }
         if (f.y < -50) { f.y = -50; f.vy *= -1; }
@@ -336,12 +323,10 @@ export function ShrinkingBarGame() {
         ctx.save();
         ctx.translate(f.x, f.y);
 
-        // Zoom rítmico
         const localScale = f.sizeScale * (1 + bass * 0.4); 
         ctx.scale(localScale, localScale);
         ctx.rotate(f.phase + bass * Math.PI * 0.2); 
 
-        // Selección de color cíclica
         const colorIndex = (Math.floor(time * 4) + f.colorOffset) % VAPORWAVE_COLORS.length;
         const color = VAPORWAVE_COLORS[colorIndex];
         
@@ -349,7 +334,6 @@ export function ShrinkingBarGame() {
         ctx.fillStyle = color;
         ctx.lineWidth = 2;
         
-        // --- DIBUJAR SEGÚN TIPO ---
         switch(f.type) {
             case 'circle':
                 ctx.beginPath();
@@ -689,6 +673,18 @@ function drawPlaying(ctx: CanvasRenderingContext2D, players: Player[], particles
       ctx.strokeStyle = "#000000";
       ctx.lineWidth = 2;
       ctx.stroke();
+
+      // === DIBUJAR INDICADOR DE ESCUDO ===
+      if (player.shields > 0) {
+        ctx.beginPath();
+        ctx.arc(cursorX, cursorY, CURSOR_RADIUS + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 5; ctx.shadowColor = "#fff";
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+      // ===================================
 
       ctx.beginPath();
       if (player.direction === 1) {
