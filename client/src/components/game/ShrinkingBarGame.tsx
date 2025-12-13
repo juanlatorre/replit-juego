@@ -25,14 +25,16 @@ export function ShrinkingBarGame() {
     particles,
     scores,
     speedRampEnabled,
+    countdown, // <--- NUEVO
     joinPlayer,
     startGame,
     startPracticeGame,
     updatePlayers,
     updateParticles,
+    updateCountdown, // <--- NUEVO
     handlePlayerInput,
     resetGame,
-    rematch, // <--- Importamos rematch
+    rematch,
     resetScores,
     setDifficulty,
     toggleSpeedRamp,
@@ -113,15 +115,14 @@ export function ShrinkingBarGame() {
         handlePlayerInput(key);
       } else if (gameState === "ended") {
         if (key.toLowerCase() === "r") {
-          rematch(); // <--- R para revancha (mismos jugadores)
+          rematch();
         } else if (key.toLowerCase() === "l") {
-          resetGame(); // <--- L para volver al lobby (menu)
+          resetGame();
         } else if (key.toLowerCase() === "c") {
           resetScores();
         }
       }
     },
-    // Añadimos rematch a las dependencias
     [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, rematch, resetScores, setDifficulty, toggleSpeedRamp]
   );
 
@@ -139,11 +140,15 @@ export function ShrinkingBarGame() {
         drawLobby(ctx, players, difficulty, scores, speedRampEnabled);
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
+      } else if (gameState === "countdown") {
+        // Dibujamos el juego estático de fondo y el número encima
+        drawPlaying(ctx, players, particles); 
+        drawCountdown(ctx, countdown);
       } else if (gameState === "ended") {
         drawEnded(ctx, winner, scores);
       }
     },
-    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled]
+    [gameState, players, winner, particles, difficulty, scores, speedRampEnabled, countdown]
   );
 
   const gameLoop = useCallback(
@@ -157,16 +162,19 @@ export function ShrinkingBarGame() {
       const delta = lastTimeRef.current ? (timestamp - lastTimeRef.current) / 1000 : 0;
       lastTimeRef.current = timestamp;
 
+      // LÓGICA DE UPDATE
       if (gameState === "playing") {
         updatePlayers(delta);
         updateParticles(delta);
+      } else if (gameState === "countdown") {
+        updateCountdown(delta);
       }
 
       drawGame(ctx);
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     },
-    [gameState, updatePlayers, updateParticles, drawGame]
+    [gameState, updatePlayers, updateParticles, updateCountdown, drawGame]
   );
 
   useEffect(() => {
@@ -190,6 +198,9 @@ export function ShrinkingBarGame() {
             <p className="mt-1">M: Modo práctica | 1-3: Dificultad | S: Velocidad Progresiva</p>
           </>
         )}
+        {gameState === "countdown" && (
+          <p className="text-yellow-400 font-bold">¡PREPÁRATE!</p>
+        )}
         {gameState === "playing" && (
           <p>Presiona tu tecla asignada para rebotar y recortar tu barra</p>
         )}
@@ -199,6 +210,37 @@ export function ShrinkingBarGame() {
       </div>
     </div>
   );
+}
+
+// === FUNCIONES DE DIBUJO ===
+
+function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number) {
+  // Oscurecer un poco el fondo
+  ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  const value = Math.ceil(countdown);
+  
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 150px Inter, sans-serif";
+  ctx.shadowColor = "black";
+  ctx.shadowBlur = 20;
+
+  if (value > 0) {
+    if (value === 3) ctx.fillStyle = "#FF6B6B";      // Rojo
+    else if (value === 2) ctx.fillStyle = "#FFE66D"; // Amarillo
+    else ctx.fillStyle = "#4ECDC4";                  // Verde/Cyan
+    
+    ctx.fillText(value.toString(), CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+  } else {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 120px Inter, sans-serif";
+    ctx.fillText("GO!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+  }
+
+  // Reset shadow
+  ctx.shadowBlur = 0;
 }
 
 function drawLobby(ctx: CanvasRenderingContext2D, players: Player[], difficulty: Difficulty, scores: ScoreEntry[], speedRampEnabled: boolean) {
@@ -402,7 +444,6 @@ function drawEnded(ctx: CanvasRenderingContext2D, winner: Player | null, scores:
     });
   }
 
-  // === NUEVA UI DE TEXTO ===
   ctx.fillStyle = "#4ECDC4";
   ctx.font = "18px Inter, sans-serif";
   ctx.fillText("R: Revancha (Mismos jugadores) | L: Lobby/Menu | C: Borrar Puntuaciones", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 40);
