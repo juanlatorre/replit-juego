@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type GameState = "lobby" | "playing" | "ended";
+export type GameState = "lobby" | "countdown" | "playing" | "ended";
 export type GameMode = "multiplayer" | "practice";
 export type Difficulty = "easy" | "normal" | "hard";
 
@@ -48,6 +48,7 @@ interface ShrinkingBarState {
   scores: ScoreEntry[];
   nextParticleId: number;
   speedRampEnabled: boolean;
+  countdown: number; // <--- NUEVO
   onPlayerEliminated: ((player: Player) => void) | null;
   onPlayerBounce: (() => void) | null;
   onGameEnd: ((winner: Player | null) => void) | null;
@@ -59,11 +60,12 @@ interface ShrinkingBarState {
   startGame: () => void;
   startPracticeGame: () => void;
   updatePlayers: (delta: number) => void;
+  updateCountdown: (delta: number) => void; // <--- NUEVO
   handlePlayerInput: (key: string) => void;
   killPlayer: (playerId: number) => void;
   checkWinner: () => void;
   resetGame: () => void;
-  rematch: () => void; // <--- NUEVA FUNCIÓN
+  rematch: () => void;
   addParticles: (x: number, y: number, color: string, count: number) => void;
   updateParticles: (delta: number) => void;
   updateScores: (winner: Player) => void;
@@ -103,6 +105,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   scores: [],
   nextParticleId: 0,
   speedRampEnabled: false,
+  countdown: 0, // <--- NUEVO
   onPlayerEliminated: null,
   onPlayerBounce: null,
   onGameEnd: null,
@@ -124,7 +127,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (state.gameState !== "lobby") return;
     if (state.usedKeys.has(key.toLowerCase())) return;
     if (state.players.length >= 4) return;
-    // Bloqueamos teclas reservadas (ahora incluimos 'l' también)
     if ([" ", "escape", "r", "m", "1", "2", "3", "s", "l"].includes(key.toLowerCase())) return;
 
     const playerIndex = state.players.length;
@@ -159,7 +161,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (state.gameState !== "lobby") return;
     if (state.players.length < 2) return;
 
-    set({ gameState: "playing" });
+    // Cambiamos a 'countdown' y ponemos 3 segundos
+    set({ gameState: "countdown", countdown: 3 });
   },
 
   startPracticeGame: () => {
@@ -182,20 +185,36 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       isAI: true,
     };
 
+    // Cambiamos a 'countdown' y ponemos 3 segundos
     set({
-      gameState: "playing",
+      gameState: "countdown",
+      countdown: 3,
       gameMode: "practice",
       players: [...state.players, aiPlayer],
     });
   },
+
+  // === NUEVA FUNCIÓN PARA EL LOOP DEL CONTADOR ===
+  updateCountdown: (delta: number) => {
+    const state = get();
+    if (state.gameState !== "countdown") return;
+    
+    const newTime = state.countdown - delta;
+    
+    // Si llegamos a 0, empezamos el juego de verdad
+    if (newTime <= 0) {
+      set({ gameState: "playing", countdown: 0 });
+    } else {
+      set({ countdown: newTime });
+    }
+  },
+  // ==============================================
 
   updatePlayers: (delta: number) => {
     const state = get();
     if (state.gameState !== "playing") return;
 
     let diedPlayer: Player | null = null;
-    
-    // Configuración de aceleración
     const ACCELERATION_PER_SECOND = 0.03;
     const MAX_SPEED = 2.0;
 
@@ -211,30 +230,23 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         const distanceToEdge = player.direction === 1 
           ? player.maxX - player.x 
           : player.x - player.minX;
-        
         const reactionThreshold = 0.05 + Math.random() * 0.1;
-        
         if (distanceToEdge < reactionThreshold) {
           let newMinX = player.minX;
           let newMaxX = player.maxX;
-
           if (player.direction === 1) {
             newMaxX = player.x;
           } else {
             newMinX = player.x;
           }
-
           const barWidth = newMaxX - newMinX;
           let newX = (newMinX + newMaxX) / 2;
-          
           if (barWidth >= 0.04) {
             newX = player.direction === 1 
               ? Math.max(newMinX + 0.02, player.x - 0.02)
               : Math.min(newMaxX - 0.02, player.x + 0.02);
           }
-
           newX = Math.max(newMinX + 0.001, Math.min(newMaxX - 0.001, newX));
-
           return {
             ...player,
             minX: newMinX,
@@ -247,12 +259,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       }
 
       const newX = player.x + currentSpeed * player.direction * delta;
-      
       if (newX <= player.minX || newX >= player.maxX) {
         diedPlayer = player;
         return { ...player, alive: false, speed: currentSpeed };
       }
-
       return { ...player, x: newX, speed: currentSpeed };
     });
 
@@ -270,7 +280,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         state.onPlayerEliminated(deadPlayer);
       }
     }
-
     get().checkWinner();
   },
 
@@ -281,7 +290,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     const playerIndex = state.players.findIndex(
       (p) => p.key === key.toLowerCase() && p.alive && !p.isAI
     );
-    
     if (playerIndex === -1) return;
 
     const player = state.players[playerIndex];
@@ -298,7 +306,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
     const barWidth = newMaxX - newMinX;
     let newX: number;
-
     if (barWidth < GRACE_MARGIN * 2) {
       newX = (newMinX + newMaxX) / 2;
     } else {
@@ -308,9 +315,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         newX = Math.min(newMaxX - GRACE_MARGIN, player.x + GRACE_MARGIN);
       }
     }
-
     newX = Math.max(newMinX + 0.001, Math.min(newMaxX - 0.001, newX));
-
     const newDirection = player.direction === 1 ? -1 : 1;
 
     const updatedPlayers = [...state.players];
@@ -343,33 +348,23 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       const barWidth = 700;
       const cursorX = 50 + player.x * barWidth;
       get().addParticles(cursorX, laneY, player.color, 20);
-      
       if (state.onPlayerEliminated) {
         state.onPlayerEliminated(player);
       }
     }
-
     get().checkWinner();
   },
 
   checkWinner: () => {
     const state = get();
     if (state.gameState !== "playing") return;
-
     const alivePlayers = state.players.filter((p) => p.alive);
-    
     if (alivePlayers.length <= 1) {
       const winner = alivePlayers.length === 1 ? alivePlayers[0] : null;
-      
       if (winner && !winner.isAI) {
         get().updateScores(winner);
       }
-
-      set({
-        gameState: "ended",
-        winner,
-      });
-
+      set({ gameState: "ended", winner });
       if (state.onGameEnd) {
         state.onGameEnd(winner);
       }
@@ -384,40 +379,37 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       usedKeys: new Set<string>(),
       particles: [],
       gameMode: "multiplayer",
+      countdown: 0, // Reset contador
     });
   },
 
-  // === NUEVA FUNCIÓN: REMATCH (REVANCHA) ===
   rematch: () => {
     const state = get();
     const baseSpeed = SPEED_BY_DIFFICULTY[state.difficulty];
-
-    // Reseteamos a los jugadores actuales a su estado inicial
     const resetPlayers = state.players.map(p => ({
       ...p,
       x: 0.5,
       minX: 0,
       maxX: 1,
-      direction: (Math.random() > 0.5 ? 1 : -1) as 1 | -1, // Dirección aleatoria al empezar
+      direction: (Math.random() > 0.5 ? 1 : -1) as 1 | -1,
       alive: true,
-      speed: baseSpeed // Importante: Resetear la velocidad base
+      speed: baseSpeed
     }));
 
+    // Cambiamos a 'countdown' con 3 segundos
     set({
-      gameState: "playing",
+      gameState: "countdown",
       players: resetPlayers,
       winner: null,
       particles: [],
-      // Mantenemos los scores y los nombres/teclas
+      countdown: 3,
     });
   },
-  // =========================================
 
   addParticles: (x: number, y: number, color: string, count: number) => {
     const state = get();
     const newParticles: Particle[] = [];
     let nextId = state.nextParticleId;
-
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
       const speed = 100 + Math.random() * 200;
@@ -433,7 +425,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         size: 4 + Math.random() * 4,
       });
     }
-
     set({
       particles: [...state.particles, ...newParticles],
       nextParticleId: nextId,
@@ -451,7 +442,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         life: p.life - delta * 2,
       }))
       .filter((p) => p.life > 0);
-
     set({ particles: updatedParticles });
   },
 
@@ -460,7 +450,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     const existingIndex = state.scores.findIndex(
       (s) => s.key === winner.key && s.color === winner.color
     );
-
     if (existingIndex >= 0) {
       const updatedScores = [...state.scores];
       updatedScores[existingIndex] = {
