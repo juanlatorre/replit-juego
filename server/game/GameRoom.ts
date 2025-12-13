@@ -70,6 +70,9 @@ export class GameRoom {
       console.log(`[Sala ${this.roomId}] 🎮 Listo para empezar! Hay ${this.players.length} jugadores. Esperando mensaje START...`);
     }
 
+    // Notify all clients about the updated player list
+    this.broadcastPlayerList();
+
     return true;
   }
 
@@ -124,6 +127,8 @@ export class GameRoom {
       id: p.id,
       color: this.getPlayerColor(p.id)
     }));
+
+    console.log(`[Sala ${this.roomId}] 📡 Enviando PLAYER_LIST_UPDATE con ${playerList.length} jugadores`);
 
     this.broadcast({
       type: "PLAYER_LIST_UPDATE",

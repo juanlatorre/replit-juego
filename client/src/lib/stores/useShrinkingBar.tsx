@@ -32,6 +32,7 @@ interface ShrinkingBarState {
   myOnlineId: number | null;
   onlinePlayerCount: number;
   onlinePlayers: Player[]; // Players in online lobby
+  isConnecting: boolean; // Shows connection status
   // ==========================
 
   onPlayerEliminated: ((player: Player) => void) | null;
@@ -96,6 +97,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   myOnlineId: null,
   onlinePlayerCount: 0,
   onlinePlayers: [],
+  isConnecting: false,
 
   onPlayerEliminated: null,
   onPlayerBounce: null,
@@ -132,10 +134,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     if (type === "local") {
       const socket = get().socket;
       if (socket) socket.close();
-      set({ connectionType: "local", socket: null, myOnlineId: null, onlinePlayerCount: 0, onlinePlayers: [] });
+      set({ connectionType: "local", socket: null, myOnlineId: null, onlinePlayerCount: 0, onlinePlayers: [], isConnecting: false });
       get().resetGame();
     } else {
-      set({ connectionType: "online", onlinePlayerCount: 0, onlinePlayers: [] });
+      set({ connectionType: "online", onlinePlayerCount: 0, onlinePlayers: [], isConnecting: true });
       get().connectOnline();
     }
   },
@@ -206,7 +208,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
           set({
             myOnlineId: msg.playerId,
             onlinePlayerCount: msg.playerId,
-            onlinePlayers: newPlayers
+            onlinePlayers: newPlayers,
+            isConnecting: false
           });
           console.log(`✅ Conectado como jugador ${msg.playerId}. Total: ${msg.playerId} jugadores`);
           break;
@@ -258,12 +261,18 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
           set({ gameState: "ended" });
           break;
 
+        case "CONNECTION_ERROR":
+          set({ isConnecting: false });
+          console.error("❌ Error de conexión al servidor");
+          break;
+
         case "DIFFICULTY_CHANGED":
           set({ difficulty: msg.difficulty });
           console.log(`⚙️ Dificultad cambiada a: ${msg.difficulty}`);
           break;
 
         case "PLAYER_LIST_UPDATE":
+          console.log(`📨 PLAYER_LIST_UPDATE recibido con ${msg.players.length} jugadores:`, msg.players);
           const updatedPlayers = msg.players.map((p: any) => ({
             id: p.id,
             key: `P${p.id}`,
@@ -279,11 +288,15 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
             isAI: false,
           }));
 
+          console.log(`🔄 Antes del set - onlinePlayers: ${get().onlinePlayers.length}, onlinePlayerCount: ${get().onlinePlayerCount}`);
           set({
             onlinePlayers: updatedPlayers,
-            onlinePlayerCount: msg.players.length
+            onlinePlayerCount: msg.players.length,
+            isConnecting: false
           });
-          console.log(`📋 Lista de jugadores actualizada: ${msg.players.length} jugadores`);
+          console.log(`📋 Después del set - Lista de jugadores actualizada: ${msg.players.length} jugadores`);
+          console.log(`🎨 onlinePlayers ahora tiene: ${updatedPlayers.length} jugadores`);
+          console.log(`🎮 onlinePlayerCount ahora es: ${get().onlinePlayerCount}`);
           break;
       }
     };
