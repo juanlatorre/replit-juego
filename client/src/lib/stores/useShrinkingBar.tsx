@@ -49,6 +49,12 @@ interface ShrinkingBarState {
   nextParticleId: number;
   speedRampEnabled: boolean;
   countdown: number;
+  
+  // === JUICY VARIABLES ===
+  screenShake: number;
+  hitStop: number;
+  // ======================
+
   onPlayerEliminated: ((player: Player) => void) | null;
   onPlayerBounce: (() => void) | null;
   onGameEnd: ((winner: Player | null) => void) | null;
@@ -61,6 +67,11 @@ interface ShrinkingBarState {
   startPracticeGame: () => void;
   updatePlayers: (delta: number) => void;
   updateCountdown: (delta: number) => void;
+  
+  // === NUEVA FUNCIÓN ===
+  updateJuice: (delta: number) => void;
+  // ====================
+
   handlePlayerInput: (key: string) => void;
   killPlayer: (playerId: number) => void;
   checkWinner: () => void;
@@ -106,6 +117,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   nextParticleId: 0,
   speedRampEnabled: false,
   countdown: 0,
+  
+  screenShake: 0,
+  hitStop: 0,
+
   onPlayerEliminated: null,
   onPlayerBounce: null,
   onGameEnd: null,
@@ -205,6 +220,28 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     }
   },
 
+  // === GESTIÓN DE EFECTOS JUICY ===
+  updateJuice: (delta: number) => {
+    const state = get();
+    
+    // Reducir temblor
+    let newShake = state.screenShake;
+    if (newShake > 0) {
+      newShake = Math.max(0, newShake - delta * 60); // 60px por segundo de decaimiento
+    }
+
+    // Reducir hitStop
+    let newHitStop = state.hitStop;
+    if (newHitStop > 0) {
+      newHitStop = Math.max(0, newHitStop - delta);
+    }
+
+    if (newShake !== state.screenShake || newHitStop !== state.hitStop) {
+      set({ screenShake: newShake, hitStop: newHitStop });
+    }
+  },
+  // ================================
+
   updatePlayers: (delta: number) => {
     const state = get();
     if (state.gameState !== "playing") return;
@@ -254,6 +291,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       }
 
       const newX = player.x + currentSpeed * player.direction * delta;
+      
+      // COLISIÓN CON BORDE
       if (newX <= player.minX || newX >= player.maxX) {
         diedPlayer = player;
         return { ...player, alive: false, speed: currentSpeed };
@@ -271,6 +310,10 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       const cursorX = 50 + deadPlayer.x * barWidth;
       get().addParticles(cursorX, laneY, deadPlayer.color, 20);
       
+      // === EFECTO JUICY AL MORIR ===
+      set({ screenShake: 20, hitStop: 0.15 }); // Temblor fuerte y pausa de 150ms
+      // ===========================
+
       if (state.onPlayerEliminated) {
         state.onPlayerEliminated(deadPlayer);
       }
@@ -290,30 +333,27 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
     const player = state.players[playerIndex];
     
-    // === CÁLCULO DE PARTICULAS AL RECORTAR ===
+    // Calculo explosión al recortar
     let explosionX = -1;
-
-    // Si vamos a la derecha, se corta lo que queda a la derecha (desde x hasta maxX)
     if (player.direction === 1) {
         if (player.x < player.maxX) {
             explosionX = (player.x + player.maxX) / 2;
         }
-    } 
-    // Si vamos a la izquierda, se corta lo que queda a la izquierda (desde minX hasta x)
-    else {
+    } else {
         if (player.x > player.minX) {
             explosionX = (player.minX + player.x) / 2;
         }
     }
 
     if (explosionX !== -1) {
-        const laneY = 80 + playerIndex * 100 + 15; // Centro vertical del carril
-        const screenX = 50 + explosionX * 700;    // Posición horizontal en pixeles
-        
-        // Generamos partículas (menos cantidad que al morir, ej: 12)
+        const laneY = 80 + playerIndex * 100 + 15;
+        const screenX = 50 + explosionX * 700;    
         get().addParticles(screenX, laneY, player.color, 12);
+        
+        // === JUICE: Micro-temblor al rebotar ===
+        set({ screenShake: 3 }); 
+        // ======================================
     }
-    // ==========================================
 
     const GRACE_MARGIN = 0.02;
 
@@ -373,6 +413,11 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       const barWidth = 700;
       const cursorX = 50 + player.x * barWidth;
       get().addParticles(cursorX, laneY, player.color, 20);
+
+      // === EFECTO JUICY AL MORIR MANUALMENTE ===
+      set({ screenShake: 20, hitStop: 0.15 });
+      // =======================================
+
       if (state.onPlayerEliminated) {
         state.onPlayerEliminated(player);
       }
@@ -405,6 +450,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       particles: [],
       gameMode: "multiplayer",
       countdown: 0,
+      screenShake: 0,
+      hitStop: 0,
     });
   },
 
@@ -427,6 +474,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       winner: null,
       particles: [],
       countdown: 3,
+      screenShake: 0,
+      hitStop: 0,
     });
   },
 
