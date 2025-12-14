@@ -214,9 +214,6 @@ export class GameRoom {
   }
 
   startGame() {
-    this.isActive = true;
-    this.lastTime = Date.now();
-
     // Resetear jugadores
     this.players.forEach((p) => {
       p.x = 0.5;
@@ -229,11 +226,18 @@ export class GameRoom {
       p.direction = Math.random() > 0.5 ? 1 : -1;
     });
 
+    // Enviar mensaje para que los clientes muestren la cuenta atrás
     this.broadcast({ type: "GAME_START" });
 
-    // Iniciar loop a 60 FPS aprox (16ms)
-    if (this.loopId) clearInterval(this.loopId);
-    this.loopId = setInterval(() => this.update(), 1000 / 60);
+    // Esperar 3 segundos antes de iniciar el juego real
+    setTimeout(() => {
+      this.isActive = true;
+      this.lastTime = Date.now();
+
+      // Iniciar loop a 60 FPS aprox (16ms)
+      if (this.loopId) clearInterval(this.loopId);
+      this.loopId = setInterval(() => this.update(), 1000 / 60);
+    }, 3000);
   }
 
   stopGame() {
