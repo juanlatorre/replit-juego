@@ -51,8 +51,7 @@ export function ShrinkingBarGame() {
     connectionType, // <--- TRAER ESTADO
     setConnectionType, // <--- TRAER FUNCIÓN
     onlinePlayerCount, // <--- NUEVO
-    onlinePlayers, // <--- NUEVO
-    isConnecting // <--- NUEVO
+    onlinePlayers // <--- NUEVO
   } = useShrinkingBar();
 
   // ... (INICIALIZACIÓN DE FRACTALES y AUDIO: Mismo código que antes) ...
@@ -216,8 +215,8 @@ export function ShrinkingBarGame() {
         else if (key.toLowerCase() === "s") toggleSpeedRamp();
         else if (key.toLowerCase() === "o") setConnectionType(connectionType === 'local' ? 'online' : 'local'); // TOGGLE TECLA
         else if (key === " " && (connectionType === "online" ? onlinePlayerCount >= 2 : players.length >= 2)) startGame();
-        else if (key.toLowerCase() === "m" && (connectionType === "online" ? onlinePlayerCount >= 1 : players.length >= 1)) startPracticeGame();
-        else if (key !== " " && key.toLowerCase() !== "m" && key.toLowerCase() !== "o" && connectionType === "local") joinPlayer(key);
+        else if (key.toLowerCase() === "m" && players.length >= 1) startPracticeGame();
+        else if (key !== " " && key.toLowerCase() !== "m" && key.toLowerCase() !== "o") joinPlayer(key);
       } else if (gameState === "playing") {
         handlePlayerInput(key);
       } else if (gameState === "ended") {
@@ -247,12 +246,7 @@ export function ShrinkingBarGame() {
 
       if (gameState === "lobby") {
         // === PASAMOS EL TIPO DE CONEXIÓN AL RENDER ===
-        const playersForLobby = connectionType === "online" ? onlinePlayers : players;
-        console.log(`🎮 Renderizando lobby - connectionType: ${connectionType}, players.length: ${playersForLobby.length}, onlinePlayerCount: ${onlinePlayerCount}, isConnecting: ${isConnecting}`);
-        if (connectionType === "online") {
-          console.log(`🎨 onlinePlayers en render: ${onlinePlayers.length}`, onlinePlayers);
-        }
-        drawLobby(ctx, playersForLobby, difficulty, scores, speedRampEnabled, connectionType, onlinePlayerCount, isConnecting);
+        drawLobby(ctx, connectionType === "online" ? onlinePlayers : players, difficulty, scores, speedRampEnabled, connectionType, onlinePlayerCount);
       } else if (gameState === "playing") {
         drawPlaying(ctx, players, particles);
         drawFloatingTexts(ctx, delta, floatingTextsRef.current);

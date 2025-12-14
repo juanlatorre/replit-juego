@@ -39,14 +39,8 @@ export function drawLobby(
   scores: ScoreEntry[],
   speedRampEnabled: boolean,
   connectionType: "local" | "online", // <--- NUEVO PARÁMETRO
-  onlinePlayerCount: number, // <--- NUEVO PARÁMETRO
-  isConnecting: boolean // <--- NUEVO PARÁMETRO
+  onlinePlayerCount: number // <--- NUEVO PARÁMETRO
 ) {
-  console.log(`🎨 drawLobby llamado - connectionType: ${connectionType}, players.length: ${players.length}, onlinePlayerCount: ${onlinePlayerCount}, isConnecting: ${isConnecting}`);
-  if (connectionType === "online") {
-    console.log(`🎨 drawLobby online players:`, players);
-  }
-
   ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.fillRect(50, 20, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 40);
 
@@ -70,23 +64,14 @@ export function drawLobby(
 
   ctx.font = "14px monospace";
   ctx.fillStyle = "#aaaaaa";
-  let subText: string;
-
-  if (connectionType === "online") {
-    if (isConnecting) {
-      subText = "Connecting to server...";
-      ctx.fillStyle = "#FFA500"; // Orange for connecting state
-    } else if (onlinePlayerCount < 2) {
-      subText = `WAITING FOR PLAYERS... (${onlinePlayerCount}/2)`;
-    } else if (onlinePlayerCount >= 2) {
-      subText = "READY! Press SPACE to start";
-      ctx.fillStyle = "#00FF00"; // Green when ready
-    } else {
-      subText = "Waiting for players...";
-    }
-  } else {
-    subText = "PRESS ANY KEY TO JOIN";
-  }
+  const subText =
+    connectionType === "online"
+      ? onlinePlayerCount < 2
+        ? `WAITING FOR PLAYERS... (${onlinePlayerCount}/2)`
+        : onlinePlayerCount >= 2
+          ? "READY! Press SPACE to start"
+          : "Waiting for players..."
+      : "PRESS ANY KEY TO JOIN";
   ctx.fillText(subText, CANVAS_WIDTH / 2, 85);
 
   // DIFICULTAD

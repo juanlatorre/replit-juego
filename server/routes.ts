@@ -53,6 +53,9 @@ export function registerRoutes(app: Express): Server {
     // Send welcome message to the new player
     ws.send(JSON.stringify({ type: "WELCOME", playerId: playerIndex }));
 
+    // Send updated player list to ALL clients
+    globalRoom.broadcastPlayerList();
+
     ws.on("message", (data) => {
       try {
         const msg = JSON.parse(data.toString());
