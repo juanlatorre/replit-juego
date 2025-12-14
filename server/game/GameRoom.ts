@@ -29,11 +29,8 @@ export class GameRoom {
   constructor(public roomId: string) {}
 
   addPlayer(ws: WebSocket): boolean {
-    console.log(`[Sala ${this.roomId}] Intentando añadir jugador. Actuales: ${this.players.length}/4, Juego activo: ${this.isActive}`);
-
     // Máximo 4 jugadores y no unirse si ya empezó
     if (this.players.length >= 4 || this.isActive) {
-      console.log(`[Sala ${this.roomId}] Rechazado: ${this.players.length >= 4 ? 'Sala llena' : 'Juego activo'}`);
       return false;
     }
 
@@ -63,11 +60,9 @@ export class GameRoom {
       shields: 1,
     });
 
-    console.log(`[Sala ${this.roomId}] ✅ Jugador ${id} (color: ${colors[id - 1]}) conectado. Total: ${this.players.length} jugadores`);
-
     // Check if we can start the game
     if (this.players.length >= 2 && !this.isActive) {
-      console.log(`[Sala ${this.roomId}] 🎮 Listo para empezar! Hay ${this.players.length} jugadores. Esperando mensaje START...`);
+      // Ready to start
     }
 
     return true;
@@ -75,9 +70,6 @@ export class GameRoom {
 
   removePlayer(ws: WebSocket) {
     this.players = this.players.filter((p) => p.ws !== ws);
-    console.log(
-      `[Sala ${this.roomId}] Jugador desconectado. Restantes: ${this.players.length}`
-    );
 
     // Notify all clients about the updated player list
     this.broadcastPlayerList();
@@ -90,7 +82,6 @@ export class GameRoom {
   }
 
   handleRematch() {
-    console.log(`[Sala ${this.roomId}] 🔄 Iniciando revancha con ${this.players.length} jugadores`);
 
     // Resetear jugadores
     this.players.forEach((p) => {
@@ -116,7 +107,6 @@ export class GameRoom {
 
   setDifficulty(newDifficulty: "easy" | "normal" | "hard") {
     this.difficulty = newDifficulty;
-    console.log(`[Sala ${this.roomId}] ⚙️ Dificultad cambiada a: ${newDifficulty}`);
 
     // Broadcast to all clients
     this.broadcast({
@@ -127,7 +117,6 @@ export class GameRoom {
 
   setSpeedRamp(enabled: boolean) {
     this.speedRampEnabled = enabled;
-    console.log(`[Sala ${this.roomId}] 🚀 Speed Ramp ${enabled ? 'activado' : 'desactivado'}`);
 
     // Broadcast to all clients
     this.broadcast({
@@ -165,10 +154,7 @@ export class GameRoom {
   handleInput(ws: WebSocket, type: string) {
     if (type === "START") {
       if (!this.isActive && this.players.length >= 2) {
-        console.log(`[Sala ${this.roomId}] 🎯 Iniciando juego con ${this.players.length} jugadores`);
         this.startGame();
-      } else {
-        console.log(`[Sala ${this.roomId}] ❌ No se puede iniciar: Activo=${this.isActive}, Jugadores=${this.players.length}`);
       }
       return;
     }
@@ -178,7 +164,7 @@ export class GameRoom {
     const player = this.players.find((p) => p.ws === ws);
     if (!player || !player.alive) return;
 
-    // === LÓGICA DE PERFECT PIVOT (SERVER SIDE - 8%) ===
+    // === LÓGICA DE PERFECT PIVOT (SERVER SIDE - 3%) ===
     const currentBarWidth = player.maxX - player.minX;
 
     const distanceToTarget =
@@ -228,7 +214,6 @@ export class GameRoom {
   }
 
   startGame() {
-    console.log(`[Sala ${this.roomId}] Juego iniciado.`);
     this.isActive = true;
     this.lastTime = Date.now();
 
@@ -322,12 +307,10 @@ export class GameRoom {
 
   checkWinner() {
     const alive = this.players.filter((p) => p.alive);
-    console.log(`[Sala ${this.roomId}] 🏁 checkWinner() - Jugadores vivos: ${alive.length}, Total: ${this.players.length}`);
 
     if (alive.length <= 1) {
       this.stopGame();
       const winnerId = alive.length === 1 ? alive[0].id : null;
-      console.log(`[Sala ${this.roomId}] 🏆 GAME_OVER - winnerId: ${winnerId}, alive players: ${alive.map(p => p.id).join(', ')}`);
 
       this.broadcast({
         type: "GAME_OVER",

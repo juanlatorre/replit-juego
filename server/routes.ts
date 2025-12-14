@@ -8,7 +8,6 @@ export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
 
   // === CONFIGURACIÓN WEBSOCKETS ===
-  console.log("🔧 Configurando servidor WebSocket en path: /ws");
   const wss = new WebSocketServer({
     server: httpServer,
     path: "/ws",
@@ -16,29 +15,20 @@ export function registerRoutes(app: Express): Server {
   });
 
   wss.on("error", (error) => {
-    console.error("❌ Error en servidor WebSocket:", error);
-  });
-
-  wss.on("listening", () => {
-    console.log("✅ Servidor WebSocket escuchando");
+    console.error("WebSocket server error:", error);
   });
 
   // Por simplicidad, usamos una única sala global.
   // En el futuro podrías crear un Map<string, GameRoom> para múltiples salas.
   const globalRoom = new GameRoom("global");
 
-  wss.on("connection", (ws, req) => {
-    console.log("🔌 Nuevo cliente WebSocket conectado!");
-    console.log(`🌐 URL de conexión: ${req.url}`);
-    console.log(`🌐 Headers:`, req.headers);
-    console.log(`📊 Estado actual de la sala: ${globalRoom.players.length} jugadores, activa: ${globalRoom.isActive}`);
+  wss.on("connection", (ws, _req) => {
 
     // Intentar unir al jugador a la sala global
     const joined = globalRoom.addPlayer(ws);
 
     if (!joined) {
       // Si la sala está llena o el juego ya empezó
-      console.log("❌ Jugador rechazado: sala llena o partida en curso");
       ws.send(
         JSON.stringify({ type: "ERROR", msg: "Sala llena o partida en curso" })
       );
@@ -48,7 +38,6 @@ export function registerRoutes(app: Express): Server {
 
     // Informar al cliente su ID y la lista completa de jugadores
     const playerIndex = globalRoom.players.length;
-    console.log(`✅ Jugador ${playerIndex} unido exitosamente. Total: ${globalRoom.players.length} jugadores`);
 
     // Send welcome message to the new player
     ws.send(JSON.stringify({ type: "WELCOME", playerId: playerIndex }));
@@ -59,26 +48,21 @@ export function registerRoutes(app: Express): Server {
     ws.on("message", (data) => {
       try {
         const msg = JSON.parse(data.toString());
-        console.log(`📨 Mensaje recibido: ${msg.type}`);
 
         // Delegar la lógica a la sala
         if (msg.type === "INPUT") {
           globalRoom.handleInput(ws, "BOUNCE");
         } else if (msg.type === "START") {
-          console.log(`🎮 Solicitud para iniciar juego recibida. Jugadores: ${globalRoom.players.length}, Activo: ${globalRoom.isActive}`);
           globalRoom.handleInput(ws, "START");
         } else if (msg.type === "REMATCH") {
-          console.log(`🔄 Solicitud de revancha recibida.`);
           globalRoom.handleRematch();
         } else if (msg.type === "SET_DIFFICULTY") {
-          console.log(`⚙️ Cambiando dificultad a: ${msg.difficulty}`);
           globalRoom.setDifficulty(msg.difficulty);
         } else if (msg.type === "TOGGLE_SPEED_RAMP") {
-          console.log(`🚀 Toggle Speed Ramp a: ${msg.enabled}`);
           globalRoom.setSpeedRamp(msg.enabled);
         }
       } catch (e) {
-        console.error("❌ Error procesando mensaje WS:", e);
+        console.error("Error processing WS message:", e);
       }
     });
 
@@ -87,11 +71,9 @@ export function registerRoutes(app: Express): Server {
     });
 
     ws.on("error", (err) => {
-      console.error("Error en WebSocket:", err);
+      console.error("WebSocket error:", err);
     });
   });
-
-  console.log("✅ Servidor WebSocket configurado exitosamente");
   // ================================
 
   return httpServer;
