@@ -134,7 +134,7 @@ export function drawLobby(
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
 
-      const pName = player.isAI ? "AI BOT" : `PLAYER ${player.id}`;
+      const pName = player.isAI ? "AI BOT" : player.name || `PLAYER ${player.id}`;
       // En Online no mostramos la tecla porque es irrelevante para los demás
       const keyInfo =
         connectionType === "local"
@@ -215,7 +215,7 @@ export function drawEnded(
     ctx.fillStyle = winner.color;
     ctx.shadowBlur = 25;
     ctx.shadowColor = winner.color;
-    const winnerLabel = winner.isAI ? "AI WINS!" : `PLAYER ${winner.id} WINS!`;
+    const winnerLabel = winner.isAI ? "AI WINS!" : `${winner.name || `PLAYER ${winner.id}`} WINS!`;
     ctx.fillText(winnerLabel, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
     ctx.shadowBlur = 0;
 
@@ -223,7 +223,7 @@ export function drawEnded(
       ctx.font = "20px monospace";
       ctx.fillStyle = "#aaaaaa";
       ctx.fillText(
-        `KEY: "${winner.key.toUpperCase()}"`,
+        winner.name ? `NAME: "${winner.name}"` : `KEY: "${winner.key.toUpperCase()}"`,
         CANVAS_WIDTH / 2,
         CANVAS_HEIGHT / 2
       );

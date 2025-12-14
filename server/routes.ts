@@ -60,6 +60,8 @@ export function registerRoutes(app: Express): Server {
           globalRoom.setDifficulty(msg.difficulty);
         } else if (msg.type === "TOGGLE_SPEED_RAMP") {
           globalRoom.setSpeedRamp(msg.enabled);
+        } else if (msg.type === "SET_PLAYER_NAME") {
+          globalRoom.setPlayerName(ws, msg.name);
         }
       } catch (e) {
         console.error("Error processing WS message:", e);

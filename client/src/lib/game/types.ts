@@ -20,6 +20,7 @@ export interface Particle {
 export interface Player {
   id: number;
   key: string;
+  name: string;
   color: string;
   x: number;
   minX: number;

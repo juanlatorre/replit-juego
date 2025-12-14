@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useShrinkingBar } from "@/lib/stores/useShrinkingBar";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, FONT_SIZE, NUM_ENTITIES, BAR_PADDING_X } from "@/lib/game/constants";
 import { FractalEntity, ShapeType, FloatingText } from "@/lib/game/types";
@@ -48,11 +48,18 @@ export function ShrinkingBarGame() {
     setDifficulty,
     toggleSpeedRamp,
     setCallbacks,
+    setPlayerName,
+    playerName,
+    socket, // <-- Get socket for sending name
     connectionType, // <--- TRAER ESTADO
     setConnectionType, // <--- TRAER FUNCIÓN
     onlinePlayerCount, // <--- NUEVO
     onlinePlayers // <--- NUEVO
   } = useShrinkingBar();
+
+  const [showNameInput, setShowNameInput] = useState(false);
+  const [tempName, setTempName] = useState("");
+  const [isTypingName, setIsTypingName] = useState(false);
 
   // ... (INICIALIZACIÓN DE FRACTALES y AUDIO: Mismo código que antes) ...
   // === INICIALIZAR ENJAMBRE GEOMÉTRICO ===
@@ -201,6 +208,9 @@ export function ShrinkingBarGame() {
     async (e: KeyboardEvent) => {
       const key = e.key;
 
+      // Don't process game keys while typing name
+      if (isTypingName) return;
+
       if (audioContextRef.current?.state === 'suspended') {
         try { await audioContextRef.current.resume(); } catch (e) { }
       }
@@ -225,7 +235,7 @@ export function ShrinkingBarGame() {
         else if (key.toLowerCase() === "c") resetScores();
       }
     },
-    [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, rematch, resetScores, setDifficulty, toggleSpeedRamp, connectionType, setConnectionType]
+    [gameState, players.length, difficulty, joinPlayer, startGame, startPracticeGame, handlePlayerInput, resetGame, rematch, resetScores, setDifficulty, toggleSpeedRamp, connectionType, setConnectionType, isTypingName]
   );
 
   useEffect(() => {
@@ -305,6 +315,43 @@ export function ShrinkingBarGame() {
           style={{ letterSpacing: '-2px' }}>
         THE SHRINKING BAR
       </h1>
+
+      {/* === NAME INPUT FOR ONLINE MODE === */}
+      {gameState === "lobby" && connectionType === "online" && (
+        <div className="z-20 mb-6 flex flex-col items-center">
+          <label className="text-white text-sm mb-2 font-mono">ENTER YOUR NAME:</label>
+          <input
+            type="text"
+            value={tempName}
+            onChange={(e) => setTempName(e.target.value.slice(0, 12))}
+            onFocus={() => setIsTypingName(true)}
+            onBlur={() => setIsTypingName(false)}
+            placeholder="Player Name"
+            className="px-4 py-2 bg-black/50 border border-[#01CDFE]/50 rounded-lg text-white font-mono text-center focus:outline-none focus:border-[#01CDFE] focus:shadow-[0_0_10px_rgba(1,205,254,0.5)]"
+            maxLength={12}
+          />
+          {tempName && tempName.trim() && (
+            <button
+              onClick={() => {
+                const trimmedName = tempName.trim();
+                setPlayerName(trimmedName);
+                setShowNameInput(false);
+
+                // Send name to server if online
+                if (connectionType === "online" && socket && socket.readyState === WebSocket.OPEN) {
+                  socket.send(JSON.stringify({
+                    type: "SET_PLAYER_NAME",
+                    name: trimmedName
+                  }));
+                }
+              }}
+              className="mt-3 px-6 py-2 bg-[#01CDFE]/20 border border-[#01CDFE] text-[#01CDFE] rounded-lg font-bold hover:bg-[#01CDFE]/30 transition-all duration-300 hover:scale-105"
+            >
+              SET NAME
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="z-20 relative group">
         <div className="absolute -inset-1 bg-gradient-to-r from-[#FF71CE] via-[#B967FF] to-[#01CDFE] rounded-lg opacity-50 group-hover:opacity-100 blur transition duration-500 animate-tilt"></div>

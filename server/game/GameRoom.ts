@@ -6,6 +6,7 @@ const SPEED_BY_DIFFICULTY = { easy: 0.2, normal: 0.35, hard: 0.55 };
 interface PlayerState {
   id: number;
   ws: WebSocket;
+  name: string;
   color: string;
   x: number;
   minX: number;
@@ -50,6 +51,7 @@ export class GameRoom {
     this.players.push({
       id,
       ws,
+      name: `Player ${id}`, // Default name, will be updated by client
       color: colors[id - 1] || "#FFF",
       x: 0.5,
       minX: 0,
@@ -125,9 +127,18 @@ export class GameRoom {
     });
   }
 
+  setPlayerName(ws: WebSocket, name: string) {
+    const player = this.players.find((p) => p.ws === ws);
+    if (player) {
+      player.name = name.slice(0, 12); // Limit name length
+      this.broadcastPlayerList(); // Update all clients with new name
+    }
+  }
+
   broadcastPlayerList() {
     const playerList = this.players.map(p => ({
       id: p.id,
+      name: p.name,
       color: this.getPlayerColor(p.id)
     }));
 
@@ -297,6 +308,7 @@ export class GameRoom {
       type: "UPDATE",
       state: this.players.map((p) => ({
         id: p.id,
+        name: p.name,
         x: p.x,
         minX: p.minX,
         maxX: p.maxX,

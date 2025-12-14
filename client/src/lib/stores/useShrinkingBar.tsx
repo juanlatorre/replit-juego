@@ -32,6 +32,7 @@ interface ShrinkingBarState {
   myOnlineId: number | null;
   onlinePlayerCount: number;
   onlinePlayers: Player[]; // Players in online lobby
+  playerName: string; // Player's chosen name
   // ==========================
 
   onPlayerEliminated: ((player: Player) => void) | null;
@@ -43,6 +44,7 @@ interface ShrinkingBarState {
   setGameMode: (mode: GameMode) => void;
   setDifficulty: (difficulty: Difficulty) => void;
   toggleSpeedRamp: () => void;
+  setPlayerName: (name: string) => void;
   joinPlayer: (key: string) => void;
   startGame: () => void;
   startPracticeGame: () => void;
@@ -96,6 +98,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   myOnlineId: null,
   onlinePlayerCount: 0,
   onlinePlayers: [],
+  playerName: "", // Player's chosen name
 
   onPlayerEliminated: null,
   onPlayerBounce: null,
@@ -131,6 +134,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     // Siempre cambiar el estado local (para respuesta inmediata)
     set((state) => ({ speedRampEnabled: !state.speedRampEnabled }));
   },
+  setPlayerName: (name: string) => set({ playerName: name }),
   setScreenShake: (amount: number) => set({ screenShake: amount }),
 
   setCallbacks: (callbacks) =>
@@ -198,13 +202,14 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
       switch (msg.type) {
         case "WELCOME":
-          const newPlayers = [];
+          const newPlayers: Player[] = [];
 
           // Create player objects for all connected players
           for (let i = 1; i <= msg.playerId; i++) {
             newPlayers.push({
               id: i,
               key: `P${i}`,
+              name: `Player ${i}`, // Default name
               color: colors[i - 1] || "#FFF",
               x: 0.5,
               minX: 0,
@@ -236,7 +241,8 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
             maxX: 1,
             x: 0.5,
             direction: 1 as const,
-            speed: 0
+            speed: 0,
+            name: p.name || `Player ${p.id}` // Ensure name field is present
           }));
           set({
             gameState: "countdown",
@@ -251,6 +257,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
           const serverPlayers = msg.state.map((p: any) => ({
             id: p.id,
             key: `P${p.id}`,
+            name: p.name || `Player ${p.id}`, // Use server-provided name
             color: p.color,
             x: p.x,
             minX: p.minX,
@@ -309,6 +316,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
           const updatedPlayers = msg.players.map((p: any) => ({
             id: p.id,
             key: `P${p.id}`,
+            name: p.name || `Player ${p.id}`, // Use server-provided name
             color: p.color || colors[p.id - 1] || "#FFF",
             x: 0.5,
             minX: 0,
@@ -367,6 +375,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     const newPlayer: Player = {
       id: playerIndex + 1,
       key: key.toLowerCase(),
+      name: key.toUpperCase(),
       color,
       x: 0.5,
       minX: 0,
@@ -411,6 +420,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     const aiPlayer: Player = {
       id: state.players.length + 1,
       key: "ai",
+      name: "AI",
       color: "#888888",
       x: 0.5,
       minX: 0,
