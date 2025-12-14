@@ -227,7 +227,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
           break;
 
         case "GAME_START":
-          set({ gameState: "playing", countdown: 0 });
+          set({ gameState: "countdown", countdown: 3 });
           break;
 
         case "UPDATE":
@@ -417,9 +417,6 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
 
   updateCountdown: (delta: number) => {
     const state = get();
-    // En online el servidor maneja el inicio
-    if (state.connectionType === "online") return;
-
     if (state.gameState !== "countdown") return;
     const newTime = state.countdown - delta;
     if (newTime <= 0) {
