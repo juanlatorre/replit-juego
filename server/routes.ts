@@ -73,6 +73,9 @@ export function registerRoutes(app: Express): Server {
         } else if (msg.type === "SET_DIFFICULTY") {
           console.log(`⚙️ Cambiando dificultad a: ${msg.difficulty}`);
           globalRoom.setDifficulty(msg.difficulty);
+        } else if (msg.type === "TOGGLE_SPEED_RAMP") {
+          console.log(`🚀 Toggle Speed Ramp a: ${msg.enabled}`);
+          globalRoom.setSpeedRamp(msg.enabled);
         }
       } catch (e) {
         console.error("❌ Error procesando mensaje WS:", e);

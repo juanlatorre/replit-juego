@@ -85,7 +85,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
   particles: [],
   scores: [],
   nextParticleId: 0,
-  speedRampEnabled: false,
+  speedRampEnabled: true,
   countdown: 0,
   screenShake: 0,
   hitStop: 0,
@@ -114,8 +114,23 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
     }
     set({ difficulty });
   },
-  toggleSpeedRamp: () =>
-    set((state) => ({ speedRampEnabled: !state.speedRampEnabled })),
+  toggleSpeedRamp: () => {
+    const state = get();
+
+    // Si estamos online, enviar al servidor
+    if (state.connectionType === "online") {
+      const socket = state.socket;
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: "TOGGLE_SPEED_RAMP",
+          enabled: !state.speedRampEnabled
+        }));
+      }
+    }
+
+    // Siempre cambiar el estado local (para respuesta inmediata)
+    set((state) => ({ speedRampEnabled: !state.speedRampEnabled }));
+  },
   setScreenShake: (amount: number) => set({ screenShake: amount }),
 
   setCallbacks: (callbacks) =>
@@ -267,6 +282,11 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
         case "DIFFICULTY_CHANGED":
           set({ difficulty: msg.difficulty });
           console.log(`⚙️ Dificultad cambiada a: ${msg.difficulty}`);
+          break;
+
+        case "SPEED_RAMP_STATUS":
+          set({ speedRampEnabled: msg.enabled });
+          console.log(`🚀 Speed Ramp ${msg.enabled ? 'activado' : 'desactivado'}`);
           break;
 
         case "PLAYER_LIST_UPDATE":

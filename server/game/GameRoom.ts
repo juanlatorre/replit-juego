@@ -23,7 +23,7 @@ export class GameRoom {
   lastTime: number = 0;
 
   // Variables globales de la sala
-  speedRampEnabled: boolean = false;
+  speedRampEnabled: boolean = true;
   difficulty: "easy" | "normal" | "hard" = "normal";
 
   constructor(public roomId: string) {}
@@ -106,6 +106,12 @@ export class GameRoom {
 
     // Iniciar juego
     this.startGame();
+
+    // Sincronizar estado de speedRampEnabled con todos los clientes
+    this.broadcast({
+      type: "SPEED_RAMP_STATUS",
+      enabled: this.speedRampEnabled
+    });
   }
 
   setDifficulty(newDifficulty: "easy" | "normal" | "hard") {
@@ -116,6 +122,17 @@ export class GameRoom {
     this.broadcast({
       type: "DIFFICULTY_CHANGED",
       difficulty: newDifficulty
+    });
+  }
+
+  setSpeedRamp(enabled: boolean) {
+    this.speedRampEnabled = enabled;
+    console.log(`[Sala ${this.roomId}] 🚀 Speed Ramp ${enabled ? 'activado' : 'desactivado'}`);
+
+    // Broadcast to all clients
+    this.broadcast({
+      type: "SPEED_RAMP_STATUS",
+      enabled: enabled
     });
   }
 
