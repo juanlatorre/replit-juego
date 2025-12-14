@@ -227,7 +227,23 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
           break;
 
         case "GAME_START":
-          set({ gameState: "countdown", countdown: 3 });
+          // Reset all players to alive state for countdown
+          const resetPlayers = state.players.map(p => ({
+            ...p,
+            alive: true,
+            shields: 1,
+            minX: 0,
+            maxX: 1,
+            x: 0.5,
+            direction: 1 as const,
+            speed: 0
+          }));
+          set({
+            gameState: "countdown",
+            countdown: 3,
+            players: resetPlayers,
+            winner: null
+          });
           break;
 
         case "UPDATE":
