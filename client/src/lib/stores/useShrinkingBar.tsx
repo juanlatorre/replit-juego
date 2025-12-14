@@ -255,7 +255,13 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
           break;
 
         case "GAME_OVER":
-          set({ gameState: "ended" });
+          // Encontrar al jugador ganador o establecer null si es empate
+          const winner = msg.winnerId ? state.players.find(p => p.id === msg.winnerId) : null;
+          console.log(`🏆 GAME_OVER - Ganador: ${winner ? `Jugador ${winner.id}` : 'DRAW'}`);
+          set({
+            gameState: "ended",
+            winner: winner
+          });
           break;
 
         case "DIFFICULTY_CHANGED":

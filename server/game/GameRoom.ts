@@ -305,11 +305,16 @@ export class GameRoom {
 
   checkWinner() {
     const alive = this.players.filter((p) => p.alive);
+    console.log(`[Sala ${this.roomId}] 🏁 checkWinner() - Jugadores vivos: ${alive.length}, Total: ${this.players.length}`);
+
     if (alive.length <= 1) {
       this.stopGame();
+      const winnerId = alive.length === 1 ? alive[0].id : null;
+      console.log(`[Sala ${this.roomId}] 🏆 GAME_OVER - winnerId: ${winnerId}, alive players: ${alive.map(p => p.id).join(', ')}`);
+
       this.broadcast({
         type: "GAME_OVER",
-        winnerId: alive.length === 1 ? alive[0].id : null,
+        winnerId: winnerId,
       });
     }
   }
