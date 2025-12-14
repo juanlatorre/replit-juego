@@ -533,7 +533,7 @@ export const useShrinkingBar = create<ShrinkingBarState>((set, get) => ({
       player.direction === 1 ? player.maxX - player.x : player.x - player.minX;
 
     const isPerfect =
-      distanceToTarget < currentBarWidth * 0.08 && distanceToTarget > 0;
+      distanceToTarget < currentBarWidth * 0.03 && distanceToTarget > 0;
 
     let newMinX = player.minX;
     let newMaxX = player.maxX;

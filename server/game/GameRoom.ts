@@ -167,9 +167,9 @@ export class GameRoom {
     const distanceToTarget =
       player.direction === 1 ? player.maxX - player.x : player.x - player.minX;
 
-    // 8% Threshold (Hardcore)
+    // 3% Threshold (Extremo)
     const isPerfect =
-      distanceToTarget < currentBarWidth * 0.08 && distanceToTarget > 0;
+      distanceToTarget < currentBarWidth * 0.03 && distanceToTarget > 0;
 
     let perfectTriggered = false;
 
